@@ -1,0 +1,22 @@
+# Ollama systemd service (run on the same VPS as the app).
+# Install Ollama first:  curl -fsSL https://ollama.com/install.sh | sh
+# Then:                  sudo systemctl daemon-reload && sudo systemctl enable --now ollama
+# Pull the model:        sudo -u ollama ollama pull llama3.2
+
+[Unit]
+Description=Ollama Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Bind to localhost only — the app talks to http://localhost:11434
+ExecStart=/usr/local/bin/ollama serve
+User=ollama
+Group=ollama
+Restart=always
+RestartSec=3
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+
+[Install]
+WantedBy=multi-user.target

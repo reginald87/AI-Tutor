@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  role          String   @default("STUDENT") // STUDENT | ADMIN
+  matricNumber  String?  @unique
+  department    String?
+  faculty       String?
+  program       String?
+  level         String?
+
+  verified      Boolean  @default(false)
+  verifyToken   String?  @unique
+  verifyTokenExpires DateTime?
+
+  // When true the user must change their password on next login (seed/admin reset).
+  mustChangePassword Boolean @default(false)
+
+  // Reward points earned by passing quizzes (encouragement system)
+  rewardPoints  Int      @default(0)
+
+  // Prompt accounting (consumed per AI generation request)
+  promptsPerDay   Int      @default(5)
+  promptsPerWeek  Int      @default(35)
+  dailyUsed       Int      @default(0)
+  weeklyUsed      Int      @default(0)
+  dailyResetAt    DateTime @default(now())
+  weeklyResetAt   DateTime @default(now())
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  documents   Document[]
+  chats       Chat[]
+  quizzes     Quiz[]
+  attempts    Attempt[]
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String
+  size      Int
+  text      String // extracted plain text used for RAG context
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Chat {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @default("New chat")
+  docId     String? // active document context for this chat
+  messages  Message[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role      String // user | assistant | system
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([chatId])
+}
+
+model Quiz {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  creatorId     String
+  creator       User     @relation(fields: [creatorId], references: [id])
+  isAdminQuiz   Boolean  @default(false)
+
+  // Targeting (admin quizzes shown to matching students)
+  faculty       String?
+  department    String?
+  program       String?
+  level         String?
+
+  // Provenance
+  sourceDocId   String?
+  generatedFrom String? // 'document' | 'topic' | 'manual'
+  status        String   @default("DRAFT") // DRAFT | PUBLISHED
+
+  questions     Question[]
+  attempts      Attempt[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isAdminQuiz, status])
+}
+
+model Question {
+  id           String   @id @default(cuid())
+  quizId       String
+  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  prompt       String
+  options      String // JSON-encoded string[]
+  correctIndex Int
+  explanation  String?
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([quizId])
+}
+
+model Attempt {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  score       Int
+  total       Int
+  percentage  Float
+  answers     String // JSON-encoded array of { questionId, selectedIndex, correct }
+  completedAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([quizId])
+}
+
+model Setting {
+  id                    String @id @default("global")
+  defaultPromptsPerDay  Int    @default(5)
+  defaultPromptsPerWeek Int    @default(35)
+  defaultModel          String @default("llama3.2:latest")
+  updatedAt             DateTime @updatedAt
+}

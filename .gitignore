@@ -1,0 +1,25 @@
+node_modules
+.next
+out
+dist
+*.log
+.env.local
+.env.*.local
+
+# SQLite databases (keep dev.db out of git; prod.db is on the server)
+prisma/dev.db
+prisma/dev.db-journal
+prisma/prod.db
+*.sqlite
+*.sqlite-journal
+
+# Local env files with secrets — NEVER commit. .env.example is kept.
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea
+.vscode

@@ -1,0 +1,40 @@
+#!/bin/bash
+# Git post-receive hook — deployed to /var/repos/ai-tutor.git/hooks/post-receive
+# On every `git push production <branch>`, this checks out the code, installs
+# deps, pushes the Prisma schema to the prod SQLite DB, seeds the admin user,
+# builds, and restarts the app under pm2.
+set -e
+
+BARE_REPO=/var/repos/ai-tutor.git
+DEPLOY_DIR=/var/www/ai-tutor
+BRANCH="main"
+
+# Which branch was pushed?
+while read oldrev newrev refname; do
+  BRANCH=$(echo "$refname" | sed 's|refs/heads/||')
+done
+
+echo "==> Deploying branch '$BRANCH' to $DEPLOY_DIR"
+
+GIT_WORK_TREE="$DEPLOY_DIR" git --git-dir="$BARE_REPO" checkout -f "$BRANCH"
+
+cd "$DEPLOY_DIR"
+
+# Clean, reproducible install from the lockfile.
+npm ci
+
+# Prisma: generate client + create/update the production SQLite schema.
+npx prisma generate
+npx prisma db push --skip-generate
+
+# Seed the admin account (reads ADMIN_PASSWORD from $DEPLOY_DIR/.env).
+NODE_ENV=production npx prisma db seed
+
+# Production build.
+npm run build
+
+# Restart under pm2 (starts on first deploy).
+pm2 restart ai-tutor || pm2 start ecosystem.config.js
+pm2 save
+
+echo "==> Deploy complete."
