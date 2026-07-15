@@ -235,9 +235,9 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-0px)] flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-screen">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-5 py-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:gap-3 sm:px-5">
         <button onClick={newChat} className="btn-outline">
           + New chat
         </button>
@@ -245,7 +245,7 @@ export default function ChatWindow() {
         <select
           value={activeDocId || ""}
           onChange={(e) => setActiveDocId(e.target.value || null)}
-          className="input max-w-xs py-1.5 text-sm"
+          className="input min-w-0 flex-1 py-1.5 text-sm sm:flex-none sm:max-w-xs"
         >
           <option value="">No document attached</option>
           {documents.map((d) => (
@@ -260,7 +260,7 @@ export default function ChatWindow() {
         </button>
         <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md" hidden onChange={onUpload} />
 
-        <div className="ml-auto flex flex-wrap items-center gap-3">
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
@@ -280,7 +280,7 @@ export default function ChatWindow() {
                 if (e.target.value) localStorage.setItem("bmu_voice_uri", e.target.value);
                 else localStorage.removeItem("bmu_voice_uri");
               }}
-              className="input max-w-[200px] py-1 text-xs"
+              className="input w-full py-1 text-xs sm:max-w-[200px]"
             >
               <option value="">System default</option>
               {voices.map((v) => (

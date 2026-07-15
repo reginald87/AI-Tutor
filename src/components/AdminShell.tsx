@@ -17,7 +17,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-3 sm:px-6">
         <div className="flex items-center gap-3">
           <Logo className="h-9 w-9" />
           <div className="leading-tight">
@@ -25,7 +25,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <div className="text-[11px] text-slate-400">Institution management</div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link href="/dashboard" className="btn-ghost">
             ← Student view
           </Link>
