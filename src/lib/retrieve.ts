@@ -70,3 +70,46 @@ export function retrieveRelevantChunks(
 
   return joined.length > maxChars ? joined.slice(0, maxChars) + "\n…[truncated]" : joined;
 }
+
+/**
+ * Like {@link retrieveRelevantChunks} but returns the individual top chunks
+ * (in original order) so the UI can cite exactly which excerpts were used to
+ * ground an answer. Returns an empty array when no document context is used.
+ */
+export function retrieveSourceChunks(
+  docText: string | null,
+  query: string,
+  opts: { maxChunks?: number; chunkSize?: number; overlap?: number } = {}
+): string[] {
+  if (!docText || !docText.trim()) return [];
+
+  const maxChunks = opts.maxChunks ?? 4;
+  const chunkSize = opts.chunkSize ?? 900;
+  const overlap = opts.overlap ?? 120;
+
+  const chunks = chunkText(docText, chunkSize, overlap);
+  if (chunks.length <= maxChunks) return chunks;
+
+  const qTerms = tokenize(query);
+  if (qTerms.length === 0) return chunks.slice(0, maxChunks);
+
+  const qSet = new Set(qTerms);
+  const scored = chunks.map((c, idx) => {
+    const terms = tokenize(c);
+    const freq = new Map<string, number>();
+    for (const t of terms) freq.set(t, (freq.get(t) || 0) + 1);
+    let score = 0;
+    for (const t of qSet) {
+      const f = freq.get(t);
+      if (f) score += 1 + Math.log(f);
+    }
+    return { idx, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, maxChunks);
+  return top
+    .sort((a, b) => a.idx - b.idx)
+    .map((t) => chunks[t.idx].trim())
+    .filter(Boolean);
+}

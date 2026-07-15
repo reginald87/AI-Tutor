@@ -56,13 +56,69 @@ Rules:
   return { system: sys, user };
 }
 
+export function buildFlashcardPrompt(spec: {
+  title?: string;
+  count?: number;
+  docText?: string | null;
+  topic?: string | null;
+}): { system: string; user: string } {
+  const count = Math.min(Math.max(spec.count ?? 8, 1), 30);
+  const context = spec.docText
+    ? `Use the following lecture notes as the SOLE source:\n\n"""\n${spec.docText}\n"""`
+    : `Create general study flashcards appropriate for a health-sciences student${
+        spec.topic ? ` about: ${spec.topic}` : ""
+      }.`;
+
+  const sys = `You are a study-coach for Bayelsa Medical University.
+Return ONLY valid JSON of the shape:
+{
+  "title": string,
+  "cards": [
+    { "front": string, "back": string }
+  ]
+}
+Rules:
+- Provide exactly ${count} flashcards.
+- "front" is a concise question or term.
+- "back" is the answer/definition, brief and accurate.
+- Do not include any text outside the JSON.`;
+
+  const user = `${context}\n\nGenerate ${count} flashcards.${
+    spec.title ? `\nDeck title suggestion: ${spec.title}.` : ""
+  }`;
+
+  return { system: sys, user };
+}
+
 export function buildChatMessages(
   history: { role: "user" | "assistant"; content: string }[],
-  docText: string | null
+  docText: string | null,
+  opts: { withConfidence?: boolean } = {}
 ): { role: "system" | "user" | "assistant"; content: string }[] {
-  const system = docText
+  let system = docText
     ? `${TUTOR_SYSTEM}\n\nThe student has shared lecture notes. Use them as primary context:\n\n"""\n${docText}\n"""`
     : TUTOR_SYSTEM;
 
+  if (opts.withConfidence) {
+    system +=
+      "\n\nBefore your answer, on the very first line, output exactly one of:" +
+      " [CONF:high], [CONF:medium], or [CONF:low] to rate how confident you are" +
+      " in this answer (high = directly from the notes/solid fact, medium = reasonable" +
+      " but worth verifying, low = uncertain or not covered). Then start your answer" +
+      " on the next line. Do not mention the tag in your answer.";
+  }
+
   return [{ role: "system", content: system }, ...history];
+}
+
+const CONF_RE = /^\[(CONF|conf):\s*(high|medium|low)\]\s*/;
+
+/**
+ * Detects and strips a leading [CONF:...] tag from streamed chat text.
+ * Returns the cleaned text and the detected confidence (or null).
+ */
+export function stripConfidence(text: string): { text: string; confidence: string | null } {
+  const m = text.match(CONF_RE);
+  if (!m) return { text, confidence: null };
+  return { text: text.replace(CONF_RE, ""), confidence: m[2].toLowerCase() };
 }

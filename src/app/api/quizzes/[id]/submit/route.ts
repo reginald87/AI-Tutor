@@ -62,6 +62,32 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
   const passed = percentage >= PASS_MARK;
 
+  // Spaced repetition: schedule every wrong answer for later review.
+  for (const q of quiz.questions) {
+    const selected = answerMap.get(q.id);
+    const correct = selected === q.correctIndex;
+    if (correct) continue;
+    await prisma.reviewItem.upsert({
+      where: { id: `${user.id}:${q.id}` },
+      create: {
+        userId: user.id,
+        quizId: quiz.id,
+        questionId: q.id,
+        prompt: q.prompt,
+        options: q.options as string,
+        correctIndex: q.correctIndex,
+        explanation: q.explanation,
+      },
+      update: {
+        quizId: quiz.id,
+        prompt: q.prompt,
+        options: q.options as string,
+        correctIndex: q.correctIndex,
+        explanation: q.explanation,
+      },
+    });
+  }
+
   // Check for a prior passing attempt BEFORE inserting this one, so we only
   // award the first-time bonus (prevents farming by retaking).
   let pointsEarned = 0;

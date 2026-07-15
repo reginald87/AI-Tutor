@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 
-type Tab = "overview" | "students" | "quizzes" | "settings";
+type Tab =
+  | "overview"
+  | "students"
+  | "quizzes"
+  | "settings"
+  | "announcements"
+  | "escalations"
+  | "assignments";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -16,7 +23,17 @@ export default function AdminPage() {
       </p>
 
       <div className="mt-5 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
-        {(["overview", "students", "quizzes", "settings"] as Tab[]).map((t) => (
+        {(
+          [
+            "overview",
+            "students",
+            "quizzes",
+            "settings",
+            "announcements",
+            "escalations",
+            "assignments",
+          ] as Tab[]
+        ).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -32,6 +49,9 @@ export default function AdminPage() {
         {tab === "students" && <StudentsTab />}
         {tab === "quizzes" && <QuizzesTab />}
         {tab === "settings" && <SettingsTab />}
+        {tab === "announcements" && <AnnouncementsTab />}
+        {tab === "escalations" && <EscalationsTab />}
+        {tab === "assignments" && <AssignmentsTab />}
       </div>
     </div>
   );
@@ -479,6 +499,486 @@ function SettingsTab() {
         <button onClick={save} className="btn-primary">
           Save settings
         </button>
+      </div>
+    </div>
+  );
+}
+
+function AnnouncementsTab() {
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [form, setForm] = useState({
+    title: "",
+    body: "",
+    faculty: "",
+    department: "",
+    program: "",
+    level: "",
+    pinned: false,
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() {
+    const d = await apiGet("/api/admin/announcements").catch(() => ({ announcements: [] }));
+    setAnnouncements(d.announcements || []);
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function create() {
+    setError("");
+    if (!form.title.trim() || !form.body.trim()) {
+      setError("Title and body are required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiPost("/api/admin/announcements", {
+        title: form.title,
+        body: form.body,
+        faculty: form.faculty || undefined,
+        department: form.department || undefined,
+        program: form.program || undefined,
+        level: form.level || undefined,
+        pinned: form.pinned,
+      });
+      setForm({
+        title: "",
+        body: "",
+        faculty: "",
+        department: "",
+        program: "",
+        level: "",
+        pinned: false,
+      });
+      load();
+    } catch (e: any) {
+      setError(e.message || "Failed to create announcement.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Delete this announcement?")) return;
+    await apiDelete(`/api/admin/announcements?id=${id}`).catch(() => {});
+    load();
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+      <div className="card h-fit p-5">
+        <h2 className="font-semibold text-slate-800">New announcement</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Broadcast a message to students. Leave targeting blank for everyone.
+        </p>
+        <div className="mt-4 space-y-3">
+          <input
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="Announcement title"
+            className="input"
+          />
+          <textarea
+            value={form.body}
+            onChange={(e) => setForm({ ...form, body: e.target.value })}
+            placeholder="Message body"
+            rows={4}
+            className="input"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={form.faculty}
+              onChange={(e) => setForm({ ...form, faculty: e.target.value })}
+              placeholder="Faculty"
+              className="input"
+            />
+            <input
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              placeholder="Department"
+              className="input"
+            />
+            <input
+              value={form.program}
+              onChange={(e) => setForm({ ...form, program: e.target.value })}
+              placeholder="Program"
+              className="input"
+            />
+            <input
+              value={form.level}
+              onChange={(e) => setForm({ ...form, level: e.target.value })}
+              placeholder="Level"
+              className="input"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={form.pinned}
+              onChange={(e) => setForm({ ...form, pinned: e.target.checked })}
+              className="accent-brand-600"
+            />
+            Pin this announcement
+          </label>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button onClick={create} disabled={busy} className="btn-primary w-full">
+            {busy ? "Posting…" : "Post announcement"}
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {announcements.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+            No announcements yet.
+          </p>
+        )}
+        {announcements.map((a) => (
+          <div key={a.id} className="card p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-slate-800">{a.title}</h3>
+                  {a.pinned && (
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">
+                      Pinned
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{a.body}</p>
+              </div>
+              <button
+                onClick={() => remove(a.id)}
+                className="btn px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              {[a.faculty, a.department, a.program, a.level].filter(Boolean).join(" · ") || "Everyone"}
+              {a.author?.name ? ` · by ${a.author.name}` : ""}
+              {a.createdAt ? ` · ${new Date(a.createdAt).toLocaleDateString()}` : ""}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EscalationsTab() {
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [openOnly, setOpenOnly] = useState(false);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    const url = openOnly ? "/api/admin/escalations?status=OPEN" : "/api/admin/escalations";
+    const d = await apiGet(url).catch(() => ({ tickets: [] }));
+    setTickets(d.tickets || []);
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function sendAnswer(id: string) {
+    const answer = answers[id]?.trim();
+    if (!answer) {
+      setMsg("Write an answer before sending.");
+      return;
+    }
+    setBusy((b) => ({ ...b, [id]: true }));
+    setMsg("");
+    try {
+      await apiPatch(`/api/admin/escalations/${id}`, { answer, status: "ANSWERED" });
+      setAnswers((a) => ({ ...a, [id]: "" }));
+      setMsg("Answer sent.");
+      load();
+    } catch (e: any) {
+      setMsg(e.message || "Failed to send answer.");
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
+    }
+  }
+
+  const statusClass: Record<string, string> = {
+    OPEN: "bg-amber-100 text-amber-700",
+    ANSWERED: "bg-green-100 text-green-700",
+    CLOSED: "bg-slate-100 text-slate-500",
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={openOnly}
+            onChange={(e) => {
+              setOpenOnly(e.target.checked);
+              setTimeout(load, 0);
+            }}
+            className="accent-brand-600"
+          />
+          Open only
+        </label>
+      </div>
+
+      {msg && <p className="mb-2 text-sm text-brand-600">{msg}</p>}
+
+      {tickets.length === 0 && (
+        <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+          {openOnly ? "No open tickets." : "No escalations yet."}
+        </p>
+      )}
+
+      <div className="space-y-3">
+        {tickets.map((t) => (
+          <div key={t.id} className="card p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-slate-800">{t.subject}</h3>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      statusClass[t.status] || "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {t.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  {t.user?.name || "Unknown"} · {t.user?.email || "—"}
+                  {[t.user?.faculty, t.user?.department, t.user?.level].filter(Boolean).join(" / ")}
+                </p>
+              </div>
+              {t.createdAt && (
+                <span className="shrink-0 text-xs text-slate-400">
+                  {new Date(t.createdAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{t.message}</p>
+
+            {t.answer && (
+              <div className="mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+                <div className="text-xs font-medium text-slate-400">Answer</div>
+                <div className="mt-1 whitespace-pre-wrap">{t.answer}</div>
+              </div>
+            )}
+
+            {(t.status === "OPEN" || t.status === "ANSWERED") && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={answers[t.id] || ""}
+                  onChange={(e) => setAnswers((a) => ({ ...a, [t.id]: e.target.value }))}
+                  placeholder="Write an answer…"
+                  rows={3}
+                  className="input"
+                />
+                <button
+                  onClick={() => sendAnswer(t.id)}
+                  disabled={busy[t.id]}
+                  className="btn-primary"
+                >
+                  {busy[t.id] ? "Sending…" : "Send answer"}
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AssignmentsTab() {
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [form, setForm] = useState({
+    quizId: "",
+    title: "",
+    faculty: "",
+    department: "",
+    program: "",
+    level: "",
+    dueAt: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() {
+    const [a, q] = await Promise.all([
+      apiGet("/api/admin/assignments").catch(() => ({ assignments: [] })),
+      apiGet("/api/quizzes").catch(() => ({ own: [], available: [] })),
+    ]);
+    setAssignments(a.assignments || []);
+    setQuizzes([...(q.own || []), ...(q.available || [])]);
+  }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function create() {
+    setError("");
+    if (!form.quizId || !form.title.trim()) {
+      setError("Title and a quiz are required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiPost("/api/admin/assignments", {
+        quizId: form.quizId,
+        title: form.title,
+        faculty: form.faculty || undefined,
+        department: form.department || undefined,
+        program: form.program || undefined,
+        level: form.level || undefined,
+        dueAt: form.dueAt ? new Date(form.dueAt).toISOString() : undefined,
+      });
+      setForm({
+        quizId: "",
+        title: "",
+        faculty: "",
+        department: "",
+        program: "",
+        level: "",
+        dueAt: "",
+      });
+      load();
+    } catch (e: any) {
+      setError(e.message || "Failed to create assignment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Delete this assignment?")) return;
+    await apiDelete(`/api/admin/assignments?id=${id}`).catch(() => {});
+    load();
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+      <div className="card h-fit p-5">
+        <h2 className="font-semibold text-slate-800">Assign a quiz</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Assign a quiz to a cohort. Leave targeting blank for everyone.
+        </p>
+        <div className="mt-4 space-y-3">
+          <input
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+            placeholder="Assignment title"
+            className="input"
+          />
+          <select
+            value={form.quizId}
+            onChange={(e) => setForm({ ...form, quizId: e.target.value })}
+            className="input"
+          >
+            <option value="">— Select a quiz —</option>
+            {quizzes.map((q) => (
+              <option key={q.id} value={q.id}>
+                {q.title}
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={form.faculty}
+              onChange={(e) => setForm({ ...form, faculty: e.target.value })}
+              placeholder="Faculty"
+              className="input"
+            />
+            <input
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              placeholder="Department"
+              className="input"
+            />
+            <input
+              value={form.program}
+              onChange={(e) => setForm({ ...form, program: e.target.value })}
+              placeholder="Program"
+              className="input"
+            />
+            <input
+              value={form.level}
+              onChange={(e) => setForm({ ...form, level: e.target.value })}
+              placeholder="Level"
+              className="input"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Due (optional)</label>
+            <input
+              type="datetime-local"
+              value={form.dueAt}
+              onChange={(e) => setForm({ ...form, dueAt: e.target.value })}
+              className="input"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button onClick={create} disabled={busy} className="btn-primary w-full">
+            {busy ? "Assigning…" : "Create assignment"}
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Title</th>
+              <th className="px-3 py-2">Quiz</th>
+              <th className="px-3 py-2">Target</th>
+              <th className="px-3 py-2">Due</th>
+              <th className="px-3 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {assignments.map((a) => (
+              <tr key={a.id}>
+                <td className="px-3 py-2 font-medium text-slate-800">{a.title}</td>
+                <td className="px-3 py-2 text-slate-600">
+                  {a.quiz?.title || "—"}
+                  {a.quiz?._count?.questions != null ? ` (${a.quiz._count.questions} Q)` : ""}
+                </td>
+                <td className="px-3 py-2 text-slate-500">
+                  {[a.faculty, a.department, a.program, a.level].filter(Boolean).join(" · ") ||
+                    "Everyone"}
+                </td>
+                <td className="px-3 py-2 text-slate-600">
+                  {a.dueAt ? new Date(a.dueAt).toLocaleString() : "—"}
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    onClick={() => remove(a.id)}
+                    className="btn px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {assignments.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
+                  No assignments yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

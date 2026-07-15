@@ -1,9 +1,9 @@
 "use client";
 
-export async function apiFetch(
+export async function apiFetch<T = any>(
   url: string,
   options: { method?: string; body?: unknown } = {}
-): Promise<any> {
+): Promise<T> {
   const res = await fetch(url, {
     method: options.method || "GET",
     headers: { "Content-Type": "application/json" },
@@ -16,13 +16,13 @@ export async function apiFetch(
     err.data = data;
     throw err;
   }
-  return data;
+  return data as T;
 }
 
-export const apiGet = (url: string) => apiFetch(url);
-export const apiPost = (url: string, body?: unknown) => apiFetch(url, { method: "POST", body });
-export const apiPatch = (url: string, body?: unknown) => apiFetch(url, { method: "PATCH", body });
-export const apiDelete = (url: string) => apiFetch(url, { method: "DELETE" });
+export const apiGet = <T = any>(url: string) => apiFetch<T>(url);
+export const apiPost = <T = any>(url: string, body?: unknown) => apiFetch<T>(url, { method: "POST", body });
+export const apiPatch = <T = any>(url: string, body?: unknown) => apiFetch<T>(url, { method: "PATCH", body });
+export const apiDelete = <T = any>(url: string) => apiFetch<T>(url, { method: "DELETE" });
 export const apiUpload = async (url: string, formData: FormData) => {
   const res = await fetch(url, { method: "POST", body: formData });
   const data = await res.json().catch(() => ({}));

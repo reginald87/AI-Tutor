@@ -10,6 +10,10 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
   { href: "/dashboard/chat", label: "AI Chat", icon: "💬" },
   { href: "/dashboard/quizzes", label: "Quizzes", icon: "📝" },
+  { href: "/dashboard/flashcards", label: "Flashcards", icon: "🃏" },
+  { href: "/dashboard/review", label: "Review", icon: "🔁" },
+  { href: "/dashboard/announcements", label: "Notices", icon: "📢" },
+  { href: "/dashboard/help", label: "Ask a human", icon: "🆘" },
 ];
 
 export default function DashboardSidebar({

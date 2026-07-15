@@ -11,15 +11,18 @@ export default function DashboardHome() {
   const [own, setOwn] = useState<any[]>([]);
   const [available, setAvailable] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<any>(null);
 
   useEffect(() => {
     Promise.all([
       apiGet("/api/chats").catch(() => ({ chats: [] })),
       apiGet("/api/quizzes").catch(() => ({ own: [], available: [] })),
-    ]).then(([c, q]) => {
+      apiGet("/api/analytics").catch(() => null),
+    ]).then(([c, q, a]) => {
       setChats(c.chats || []);
       setOwn(q.own || []);
       setAvailable(q.available || []);
+      setAnalytics(a);
       setLoading(false);
     });
   }, []);
@@ -106,6 +109,66 @@ export default function DashboardHome() {
           )}
         </section>
       </div>
+
+      {analytics && analytics.totalAttempts > 0 && (
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          <section className="card p-5">
+            <h2 className="font-semibold text-slate-800">Your progress</h2>
+            <div className="mt-3 flex gap-6">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Accuracy</div>
+                <div className="text-3xl font-bold text-slate-800">{analytics.accuracy}%</div>
+                <div className="text-xs text-slate-400">
+                  {analytics.totalCorrect}/{analytics.totalQuestions} correct
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">Avg score</div>
+                <div className="text-3xl font-bold text-slate-800">{analytics.averagePercentage}%</div>
+                <div className="text-xs text-slate-400">{analytics.quizzesTaken} quizzes taken</div>
+              </div>
+            </div>
+            {analytics.focusTopic && (
+              <Link
+                href="/dashboard/quizzes"
+                className="mt-4 inline-block rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800"
+              >
+                🎯 Focus next on: <span className="font-semibold">{analytics.focusTopic}</span>
+              </Link>
+            )}
+          </section>
+
+          <section className="card p-5">
+            <h2 className="font-semibold text-slate-800">Weak areas to review</h2>
+            {analytics.weakest.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-400">No weak spots yet — nice work! 🎉</p>
+            ) : (
+              <ul className="mt-3 space-y-1">
+                {analytics.weakest.map((w: any) => (
+                  <li key={w.quizId}>
+                    <Link
+                      href={`/dashboard/quizzes/${w.quizId}`}
+                      className="flex items-center justify-between rounded-lg px-2 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <span className="truncate">{w.title}</span>
+                      <span className="ml-2 shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                        best {w.best}%
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+                {analytics.missedQuestions?.length > 0 && (
+                  <li className="pt-2">
+                    <Link href="/dashboard/review" className="text-xs font-medium text-brand-600 hover:underline">
+                      🔁 {analytics.missedQuestions.length} questions queued for spaced review →
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
