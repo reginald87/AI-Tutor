@@ -44,6 +44,13 @@ model User {
   chats       Chat[]
   quizzes     Quiz[]
   attempts    Attempt[]
+
+  announcements Announcement[]
+  escalations  Escalation[] @relation("EscalationAuthor")
+  answeredEscalations Escalation[] @relation("EscalationAnswerer")
+  flashcardDecks FlashcardDeck[]
+  reviewItems  ReviewItem[]
+  assignments  Assignment[]
 }
 
 model Document {
@@ -78,6 +85,10 @@ model Message {
   chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   role      String // user | assistant | system
   content   String
+  // JSON array of { docId, filename, snippet } retrieved to ground this reply.
+  sources   String?
+  // Model's self-reported confidence: "high" | "medium" | "low"
+  confidence String?
   createdAt DateTime @default(now())
 
   @@index([chatId])
@@ -104,6 +115,7 @@ model Quiz {
 
   questions     Question[]
   attempts      Attempt[]
+  assignments   Assignment[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -145,5 +157,118 @@ model Setting {
   defaultPromptsPerDay  Int    @default(5)
   defaultPromptsPerWeek Int    @default(35)
   defaultModel          String @default("llama3.2:latest")
+  // Optional vision model used for image input (e.g. llava).
+  visionModel           String?
   updatedAt             DateTime @updatedAt
+}
+
+// ---- Announcements (admin notice board) ----
+model Announcement {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  // Targeting (null/empty = everyone). Matches student profile fields.
+  faculty    String?
+  department String?
+  program    String?
+  level      String?
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ---- Ask-a-human escalation ----
+model Escalation {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("EscalationAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  chatId        String?
+  subject       String
+  message       String
+  status        String   @default("OPEN") // OPEN | ANSWERED | CLOSED
+  answer        String?
+  answeredById  String?
+  answeredBy    User?    @relation("EscalationAnswerer", fields: [answeredById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([userId])
+}
+
+// ---- Flashcards (with built-in spaced repetition) ----
+model FlashcardDeck {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  sourceDocId String?
+  sourceQuizId String?
+  createdAt   DateTime @default(now())
+
+  cards Flashcard[]
+
+  @@index([userId])
+}
+
+model Flashcard {
+  id           String   @id @default(cuid())
+  deckId       String
+  deck         FlashcardDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  front        String
+  back         String
+  // Spaced-repetition state (SM-2 style)
+  dueAt        DateTime @default(now())
+  interval     Int      @default(0)
+  ease         Float    @default(2.5)
+  repetitions  Int      @default(0)
+  lastRating   Int?
+  createdAt    DateTime @default(now())
+
+  @@index([deckId])
+  @@index([dueAt])
+}
+
+// ---- Spaced repetition for quiz mistakes ----
+model ReviewItem {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId       String
+  questionId   String
+  prompt       String
+  options      String // JSON-encoded string[]
+  correctIndex Int
+  explanation  String?
+  // Spaced-repetition state
+  dueAt        DateTime @default(now())
+  interval     Int      @default(0)
+  ease         Float    @default(2.5)
+  repetitions  Int      @default(0)
+  lastRating   Int?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([dueAt])
+}
+
+// ---- Bulk quiz assignment (admin -> cohorts) ----
+model Assignment {
+  id           String   @id @default(cuid())
+  quizId       String
+  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  assignedById String
+  assignedBy   User     @relation(fields: [assignedById], references: [id], onDelete: Cascade)
+  title        String
+  faculty      String?
+  department   String?
+  program      String?
+  level        String?
+  dueAt        DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
 }
