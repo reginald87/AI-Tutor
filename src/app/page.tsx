@@ -31,7 +31,8 @@ export default function LandingPage() {
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-white/70">
           Chat with your lecture notes, generate quizzes from any document, and test your
-          understanding with instant auto-grading — all powered by a private, on-campus AI.
+          understanding with instant auto-grading. Now with cited answers, flashcards, spaced
+          repetition, and smart study insights — all powered by a private, on-campus AI.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
           <Link
@@ -56,6 +57,18 @@ export default function LandingPage() {
             body: "Upload PDFs, Word docs or text and ask questions. Answers are grounded in your own material.",
           },
           {
+            title: "Cited answers",
+            body: "Every reply shows the exact note excerpts it was based on, so you can verify the source.",
+          },
+          {
+            title: "Confidence you can see",
+            body: "Each answer is tagged confident, fairly sure, or uncertain — so you know when to double-check.",
+          },
+          {
+            title: "Snap a photo",
+            body: "Send a whiteboard or diagram and the tutor reads the image and explains it back to you.",
+          },
+          {
             title: "Generate quizzes",
             body: "Turn any uploaded document or topic into a multiple-choice quiz with one correct answer.",
           },
@@ -64,16 +77,28 @@ export default function LandingPage() {
             body: "Submit your answers and get an immediate score, plus explanations for every question.",
           },
           {
+            title: "Flashcards & review",
+            body: "Turn notes into flashcards and drill your mistakes with spaced repetition that adapts to you.",
+          },
+          {
+            title: "Smart study insights",
+            body: "See your accuracy, weakest topics, and a focus suggestion drawn from past quiz attempts.",
+          },
+          {
+            title: "Notices & assignments",
+            body: "Admins post announcements and assign quizzes to your cohort by faculty, department and level.",
+          },
+          {
+            title: "Ask a human",
+            body: "Stuck? Send a question to a lecturer and get their reply right inside the app.",
+          },
+          {
             title: "Voice in, voice out",
             body: "Speak your questions with speech-to-text and listen to responses with text-to-speech.",
           },
           {
-            title: "Faculty-aware",
-            body: "Admins publish quizzes targeted by faculty, department, program and level.",
-          },
-          {
-            title: "Private & fast",
-            body: "Runs on a local Ollama model on the university VPS — no data leaves campus.",
+            title: "Private, fast & offline-ready",
+            body: "Runs on a local Ollama model on the university VPS — no data leaves campus, and it works offline.",
           },
         ].map((f) => (
           <div
