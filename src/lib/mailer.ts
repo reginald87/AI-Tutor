@@ -57,3 +57,68 @@ export async function sendVerificationEmail(to: string, name: string, token: str
   });
   return true;
 }
+
+export async function sendPasswordResetEmail(to: string, name: string, token: string): Promise<boolean> {
+  const link = `${CONFIG.appUrl}/reset-password?token=${token}`;
+
+  if (!isMailConfigured()) {
+    console.warn(
+      `\n[mailer] SMTP not configured — password reset email NOT sent.\n` +
+        `         Account: ${to}\n         Reset link: ${link}\n`
+    );
+    return false;
+  }
+
+  const html = `
+  <div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto">
+    <h2 style="color:#1d4ed8">Reset your ${CONFIG.appName} password</h2>
+    <p>Hi ${name},</p>
+    <p>We received a request to reset your password. Click below to choose a new one. If you didn't request this, you can ignore the email.</p>
+    <p style="margin:24px 0">
+      <a href="${link}" style="background:#1d4ed8;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">Reset my password</a>
+    </p>
+    <p style="color:#64748b;font-size:13px">This link expires in 1 hour.</p>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+    <p style="color:#94a3b8;font-size:12px">${CONFIG.appName} · Bayelsa Medical University</p>
+  </div>`;
+
+  await getTransport().sendMail({
+    from: CONFIG.smtpFrom,
+    to,
+    subject: `Reset your ${CONFIG.appName} password`,
+    html,
+  });
+  return true;
+}
+
+export async function sendAdminPasswordResetEmail(
+  to: string,
+  name: string,
+  newPassword: string
+): Promise<boolean> {
+  if (!isMailConfigured()) {
+    console.warn(
+      `\n[mailer] SMTP not configured — admin password reset email NOT sent for ${to}.\n`
+    );
+    return false;
+  }
+
+  const html = `
+  <div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:480px;margin:0 auto">
+    <h2 style="color:#1d4ed8">Your password was reset</h2>
+    <p>Hi ${name},</p>
+    <p>An administrator reset your ${CONFIG.appName} password. Your new temporary password is:</p>
+    <p style="margin:16px 0;font-size:18px;font-weight:700;letter-spacing:1px;background:#f1f5f9;padding:12px 16px;border-radius:8px;display:inline-block">${newPassword}</p>
+    <p>Please log in and change it immediately from your account settings.</p>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0" />
+    <p style="color:#94a3b8;font-size:12px">${CONFIG.appName} · Bayelsa Medical University</p>
+  </div>`;
+
+  await getTransport().sendMail({
+    from: CONFIG.smtpFrom,
+    to,
+    subject: `Your ${CONFIG.appName} password was reset`,
+    html,
+  });
+  return true;
+}

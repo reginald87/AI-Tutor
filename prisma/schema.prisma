@@ -26,6 +26,10 @@ model User {
   // When true the user must change their password on next login (seed/admin reset).
   mustChangePassword Boolean @default(false)
 
+  // Password reset (forgot-password flow + admin reset).
+  resetToken String? @unique
+  resetTokenExpires DateTime?
+
   // Reward points earned by passing quizzes (encouragement system)
   rewardPoints  Int      @default(0)
 

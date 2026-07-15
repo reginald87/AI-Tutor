@@ -111,6 +111,19 @@ function StudentsTab() {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // Reset-password modal
+  const [resetTarget, setResetTarget] = useState<any | null>(null);
+  const [resetPw, setResetPw] = useState("");
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+
+  // View-conversations drawer
+  const [viewTarget, setViewTarget] = useState<any | null>(null);
+  const [viewChats, setViewChats] = useState<any[]>([]);
+  const [viewChat, setViewChat] = useState<any | null>(null);
+  const [viewMessages, setViewMessages] = useState<any[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+
   async function load() {
     setLoading(true);
     const params = new URLSearchParams();
@@ -141,6 +154,47 @@ function StudentsTab() {
     if (!confirm("Delete this student? This cannot be undone.")) return;
     await apiDelete(`/api/admin/students/${id}`).catch(() => {});
     load();
+  }
+
+  async function doReset() {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    setResetResult(null);
+    try {
+      const body: any = {};
+      if (resetPw.trim()) body.newPassword = resetPw.trim();
+      const d = await apiPost(`/api/admin/students/${resetTarget.id}/reset-password`, body);
+      setResetResult(d.password);
+      setMsg("");
+    } catch (e: any) {
+      setResetResult("ERROR: " + (e.message || "Reset failed"));
+    } finally {
+      setResetBusy(false);
+    }
+  }
+
+  function openViewer(s: any) {
+    setViewTarget(s);
+    setViewChat(null);
+    setViewMessages([]);
+    setViewLoading(true);
+    apiGet(`/api/admin/students/${s.id}/chats`)
+      .then((d) => setViewChats(d.chats || []))
+      .catch(() => setViewChats([]))
+      .finally(() => setViewLoading(false));
+  }
+
+  async function openChat(chatId: string) {
+    setViewLoading(true);
+    try {
+      const d = await apiGet(`/api/admin/chats/${chatId}`);
+      setViewChat(d.chat);
+      setViewMessages(d.chat.messages || []);
+    } catch {
+      setViewMessages([]);
+    } finally {
+      setViewLoading(false);
+    }
   }
 
   return (
@@ -216,12 +270,30 @@ function StudentsTab() {
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-1">
                     <button
                       onClick={() => patch(s.id, { verified: !s.verified })}
                       className="btn-outline px-2 py-1 text-xs"
                     >
                       {s.verified ? "Unverify" : "Verify"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setResetTarget(s);
+                        setResetPw("");
+                        setResetResult(null);
+                      }}
+                      className="btn-outline px-2 py-1 text-xs"
+                      title="Reset this student's password"
+                    >
+                      Reset PW
+                    </button>
+                    <button
+                      onClick={() => openViewer(s)}
+                      className="btn-outline px-2 py-1 text-xs"
+                      title="View what this student has been asking"
+                    >
+                      View chats
                     </button>
                     <button
                       onClick={() => remove(s.id)}
@@ -243,6 +315,118 @@ function StudentsTab() {
           </tbody>
         </table>
       </div>
+
+      {/* Reset password modal */}
+      {resetTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-800">Reset password</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              For <span className="font-medium">{resetTarget.name}</span> ({resetTarget.email}). Leave
+              blank to generate a temporary password (student must change it on next login).
+            </p>
+            <input
+              type="text"
+              value={resetPw}
+              onChange={(e) => setResetPw(e.target.value)}
+              placeholder="New password (optional, min 6)"
+              className="input mt-3"
+            />
+            {resetResult && !resetResult.startsWith("ERROR") && (
+              <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                <div>Temporary password (also emailed if SMTP is set):</div>
+                <div className="mt-1 break-all rounded bg-white px-2 py-1 font-mono text-green-900">
+                  {resetResult}
+                </div>
+              </div>
+            )}
+            {resetResult && resetResult.startsWith("ERROR") && (
+              <p className="mt-3 text-sm text-red-600">{resetResult}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setResetTarget(null);
+                  setResetResult(null);
+                  setResetPw("");
+                }}
+                className="btn-outline"
+              >
+                Close
+              </button>
+              <button onClick={doReset} disabled={resetBusy} className="btn-primary">
+                {resetBusy ? "Resetting…" : "Reset password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View student conversations drawer */}
+      {viewTarget && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="flex-1 bg-slate-900/40" onClick={() => setViewTarget(null)} />
+          <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <div className="font-semibold text-slate-800">{viewTarget.name}'s conversations</div>
+                <div className="text-xs text-slate-400">{viewTarget.email}</div>
+              </div>
+              <button
+                onClick={() => setViewTarget(null)}
+                className="grid h-8 w-8 place-items-center rounded-md text-slate-400 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-1 overflow-hidden">
+              <div className="w-56 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50 p-2">
+                {viewLoading && <p className="p-2 text-sm text-slate-400">Loading…</p>}
+                {!viewLoading && viewChats.length === 0 && (
+                  <p className="p-2 text-sm text-slate-400">No conversations yet.</p>
+                )}
+                {viewChats.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => openChat(c.id)}
+                    className={`mb-1 block w-full truncate rounded-lg px-3 py-2 text-left text-sm hover:bg-white ${
+                      viewChat?.id === c.id ? "bg-white text-brand-700" : "text-slate-700"
+                    }`}
+                  >
+                    {c.title}
+                    <span className="block text-xs text-slate-400">
+                      {new Date(c.updatedAt).toLocaleDateString()}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="scroll-thin flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
+                {viewLoading && <p className="text-sm text-slate-400">Loading…</p>}
+                {!viewLoading && viewMessages.length === 0 && (
+                  <p className="text-sm text-slate-400">Select a conversation.</p>
+                )}
+                {viewMessages.map((m: any, i: number) => (
+                  <div
+                    key={i}
+                    className={`rounded-xl p-3 text-sm ${
+                      m.role === "user"
+                        ? "ml-auto max-w-[85%] bg-brand-600 text-white"
+                        : "mr-auto max-w-[85%] border border-slate-200 bg-white text-slate-800"
+                    }`}
+                  >
+                    {m.content}
+                    {m.role === "assistant" && m.sources?.length > 0 && (
+                      <div className="mt-2 text-xs text-slate-400">
+                        📚 {m.sources.length} source(s)
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
