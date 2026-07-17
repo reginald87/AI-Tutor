@@ -225,7 +225,7 @@ function StudentsTab() {
 
       {msg && <p className="mb-2 text-sm text-brand-600">{msg}</p>}
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <div className="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white sm:block">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase text-slate-400">
             <tr>
@@ -316,6 +316,83 @@ function StudentsTab() {
         </table>
       </div>
 
+      {/* Mobile card layout */}
+      <div className="space-y-3 sm:hidden">
+        {students.map((s) => (
+          <div key={s.id} className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-medium text-slate-800">{s.name}</div>
+                <div className="text-xs text-slate-400">{s.email}</div>
+              </div>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                  s.verified ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {s.verified ? "Verified" : "Pending"}
+              </span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-y-1 text-sm text-slate-600">
+              <span className="text-slate-400">Matric</span>
+              <span>{s.matricNumber || "—"}</span>
+              <span className="text-slate-400">Faculty / Dept</span>
+              <span>{[s.faculty, s.department].filter(Boolean).join(" / ") || "—"}</span>
+              <span className="text-slate-400">Prompts/day</span>
+              <span>
+                <input
+                  type="number"
+                  min={1}
+                  defaultValue={s.promptsPerDay}
+                  onBlur={(e) => {
+                    const v = Number(e.target.value);
+                    if (v && v !== s.promptsPerDay) patch(s.id, { promptsPerDay: v });
+                  }}
+                  className="input w-20 py-1"
+                />
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1">
+              <button
+                onClick={() => patch(s.id, { verified: !s.verified })}
+                className="btn-outline px-2 py-1 text-xs"
+              >
+                {s.verified ? "Unverify" : "Verify"}
+              </button>
+              <button
+                onClick={() => {
+                  setResetTarget(s);
+                  setResetPw("");
+                  setResetResult(null);
+                }}
+                className="btn-outline px-2 py-1 text-xs"
+                title="Reset this student's password"
+              >
+                Reset PW
+              </button>
+              <button
+                onClick={() => openViewer(s)}
+                className="btn-outline px-2 py-1 text-xs"
+                title="View what this student has been asking"
+              >
+                View chats
+              </button>
+              <button
+                onClick={() => remove(s.id)}
+                className="btn px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+        {students.length === 0 && (
+          <p className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+            {loading ? "Loading…" : "No students found."}
+          </p>
+        )}
+      </div>
+
       {/* Reset password modal */}
       {resetTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
@@ -379,8 +456,8 @@ function StudentsTab() {
                 ✕
               </button>
             </div>
-            <div className="flex flex-1 overflow-hidden">
-              <div className="w-56 shrink-0 overflow-y-auto border-r border-slate-200 bg-slate-50 p-2">
+            <div className="flex flex-1 flex-col overflow-hidden sm:flex-row">
+              <div className="max-h-40 shrink-0 overflow-y-auto border-b border-slate-200 bg-slate-50 p-2 sm:max-h-none sm:w-56 sm:border-b-0 sm:border-r">
                 {viewLoading && <p className="p-2 text-sm text-slate-400">Loading…</p>}
                 {!viewLoading && viewChats.length === 0 && (
                   <p className="p-2 text-sm text-slate-400">No conversations yet.</p>

@@ -49,10 +49,14 @@ export async function sendVerificationEmail(to: string, name: string, token: str
     <p style="color:#94a3b8;font-size:12px">${CONFIG.appName} · Bayelsa Medical University</p>
   </div>`;
 
+  const text = `Welcome to ${CONFIG.appName}!\n\nHi ${name},\n\nThanks for creating your account. Please confirm your email address by opening this link:\n${link}\n\nThis link expires in 24 hours. If you did not create a ${CONFIG.appName} account, you can ignore this email.\n\n${CONFIG.appName} · Bayelsa Medical University`;
+
   await getTransport().sendMail({
     from: CONFIG.smtpFrom,
     to,
+    replyTo: CONFIG.smtpFrom,
     subject: `Verify your ${CONFIG.appName} account`,
+    text,
     html,
   });
   return true;
@@ -82,10 +86,14 @@ export async function sendPasswordResetEmail(to: string, name: string, token: st
     <p style="color:#94a3b8;font-size:12px">${CONFIG.appName} · Bayelsa Medical University</p>
   </div>`;
 
+  const text = `Reset your ${CONFIG.appName} password\n\nHi ${name},\n\nWe received a request to reset your password. Open this link to choose a new one:\n${link}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore the email.\n\n${CONFIG.appName} · Bayelsa Medical University`;
+
   await getTransport().sendMail({
     from: CONFIG.smtpFrom,
     to,
+    replyTo: CONFIG.smtpFrom,
     subject: `Reset your ${CONFIG.appName} password`,
+    text,
     html,
   });
   return true;
@@ -114,10 +122,14 @@ export async function sendAdminPasswordResetEmail(
     <p style="color:#94a3b8;font-size:12px">${CONFIG.appName} · Bayelsa Medical University</p>
   </div>`;
 
+  const text = `Your password was reset\n\nHi ${name},\n\nAn administrator reset your ${CONFIG.appName} password. Your new temporary password is:\n${newPassword}\n\nPlease log in and change it immediately from your account settings.\n\n${CONFIG.appName} · Bayelsa Medical University`;
+
   await getTransport().sendMail({
     from: CONFIG.smtpFrom,
     to,
+    replyTo: CONFIG.smtpFrom,
     subject: `Your ${CONFIG.appName} password was reset`,
+    text,
     html,
   });
   return true;
