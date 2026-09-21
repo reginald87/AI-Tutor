@@ -43,6 +43,8 @@ export async function* chatStream(
       model,
       messages,
       stream: true,
+      // Keep the model resident so the next request doesn't pay the load penalty.
+      keep_alive: 1800,
       options: { temperature: opts.temperature ?? 0.7, num_ctx: 4096, num_predict: 1024 },
     }),
     signal: opts.signal,
@@ -95,9 +97,13 @@ export async function generate(
       system: opts.system,
       stream: false,
       format: "json",
-      options: { temperature: opts.temperature ?? 0.4, num_ctx: 8192, num_predict: 2048 },
+      // Keep the model resident; model load is the biggest cost on small VPS CPUs.
+      keep_alive: 1800,
+      options: { temperature: opts.temperature ?? 0.4, num_ctx: 6144, num_predict: 2048 },
     }),
-    signal: opts.signal,
+    // Fail with a clear error instead of hanging forever. 240s < nginx's 300s
+    // proxy_read_timeout, so nginx won't 504 before this fires.
+    signal: opts.signal ?? AbortSignal.timeout(240_000),
   });
 
   if (!res.ok) {
