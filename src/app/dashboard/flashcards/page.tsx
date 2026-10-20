@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, apiDelete, pollUntil } from "@/lib/api";
 
 interface FlashcardDeck {
   id: string;
@@ -10,6 +10,8 @@ interface FlashcardDeck {
   createdAt: string;
   sourceDocId: string | null;
   sourceQuizId: string | null;
+  status: string;
+  error: string | null;
   _count: { cards: number };
 }
 
@@ -103,12 +105,22 @@ export default function FlashcardsPage() {
     }
     setBusy(true);
     try {
-      const res = await apiPost<{ deckId: string; cardCount: number }>("/api/flashcards", {
+      const res = await apiPost<{ deckId: string }>("/api/flashcards", {
         title: title || undefined,
         topic: topic || undefined,
         fromDoc: fromDoc || undefined,
         count,
       });
+      setError("Generating deck… this can take a few minutes on the server.");
+      await pollUntil(async () => {
+        const data = await apiGet<{ decks: FlashcardDeck[] }>("/api/flashcards");
+        const deck = data.decks.find((d) => d.id === res.deckId);
+        if (deck?.status === "FAILED") {
+          throw new Error(deck.error || "Flashcard generation failed. Please try again.");
+        }
+        return deck?.status === "PUBLISHED" && (deck._count?.cards ?? 0) > 0;
+      });
+      setError("");
       await refresh();
       await openDeck(res.deckId);
     } catch (err: any) {
@@ -116,6 +128,12 @@ export default function FlashcardsPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function removeDeck(id: string) {
+    if (!confirm("Delete this deck?")) return;
+    await apiDelete(`/api/flashcards/${id}`).catch(() => {});
+    load();
   }
 
   async function rate(rating: number) {
@@ -300,24 +318,53 @@ export default function FlashcardsPage() {
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {decks.map((deck) => (
-                  <button
+                  <div
                     key={deck.id}
-                    onClick={() => openDeck(deck.id)}
                     className="card block p-4 text-left transition hover:border-brand-300 hover:shadow"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-semibold text-slate-800">{deck.title}</h3>
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                        {deck._count?.cards ?? 0} cards
-                      </span>
+                      <button
+                        onClick={() => openDeck(deck.id)}
+                        disabled={deck.status !== "PUBLISHED"}
+                        className="min-w-0 text-left"
+                      >
+                        <h3 className="font-semibold text-slate-800">{deck.title}</h3>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {deck.status === "GENERATING" && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                            Generating…
+                          </span>
+                        )}
+                        {deck.status === "FAILED" && (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                            Failed
+                          </span>
+                        )}
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                          {deck._count?.cards ?? 0} cards
+                        </span>
+                        <button
+                          onClick={() => removeDeck(deck.id)}
+                          className="text-xs text-red-500 hover:text-red-700"
+                          title="Delete deck"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">
-                      Created {new Date(deck.createdAt).toLocaleDateString()}
-                    </p>
+                    {deck.status === "FAILED" && deck.error && (
+                      <p className="mt-1 text-xs text-red-500">{deck.error}</p>
+                    )}
+                    {deck.status !== "FAILED" && (
+                      <p className="mt-1 text-xs text-slate-400">
+                        Created {new Date(deck.createdAt).toLocaleDateString()}
+                      </p>
+                    )}
                     <div className="mt-3 text-xs font-medium text-brand-600">
-                      Study →
+                      {deck.status === "PUBLISHED" ? "Study →" : "…"}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}

@@ -6,9 +6,9 @@ import { consumePrompt, getPromptState } from "@/lib/prompts";
 import { generate, ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
 import { buildQuizPrompt } from "@/lib/llm";
 import { sanitizeQuiz } from "@/lib/quiz";
+import { runInBackground } from "@/lib/background";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 const generateSchema = z.object({
   title: z.string().max(160).optional(),
@@ -31,6 +31,8 @@ export async function GET() {
       description: true,
       createdAt: true,
       generatedFrom: true,
+      status: true,
+      error: true,
       _count: { select: { questions: true } },
       attempts: {
         where: { userId: user.id },
@@ -120,62 +122,67 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const spec = {
-    title: title || (topic ? `Quiz: ${topic}` : "Generated Quiz"),
-    description,
-    count: count ?? 5,
-    level: user.level,
-    department: user.department,
-    faculty: user.faculty,
-    docText,
-  };
-  const { system, user: userPrompt } = buildQuizPrompt(spec);
+  const chosenTitle = title?.trim() || (topic ? `Quiz: ${topic}` : "Generated Quiz");
 
-  let raw: string;
-  try {
-    raw = await generate(userPrompt, { system });
-  } catch (err) {
-    return NextResponse.json(
-      { error: "Quiz generation failed: " + ((err as Error)?.message || "unknown error") },
-      { status: 502 }
-    );
-  }
-
-  let cleaned: any;
-  try {
-    cleaned = parseJsonBlock(raw);
-  } catch {
-    return NextResponse.json(
-      { error: "The model returned an invalid quiz. Please retry." },
-      { status: 502 }
-    );
-  }
-
-  const quiz = sanitizeQuiz(cleaned);
-  if (quiz.questions.length === 0) {
-    return NextResponse.json({ error: "No valid questions were generated." }, { status: 502 });
-  }
-
+  // Create the quiz row immediately as GENERATING, then fill it in the
+  // background so the response is fast (avoids proxy/Cloudflare timeouts).
   const created = await prisma.quiz.create({
     data: {
-      title: quiz.title,
-      description: quiz.description || null,
+      title: chosenTitle.slice(0, 160),
+      description: description?.trim() || null,
       creatorId: user.id,
       isAdminQuiz: false,
       sourceDocId: fromDoc || null,
       generatedFrom: docText ? "document" : "topic",
-      status: "PUBLISHED",
-      questions: {
-        create: quiz.questions.map((q, i) => ({
-          prompt: q.prompt,
-          options: JSON.stringify(q.options),
-          correctIndex: q.correctIndex,
-          explanation: q.explanation,
-          order: i,
-        })),
-      },
+      status: "GENERATING",
     },
   });
 
-  return NextResponse.json({ quizId: created.id, questionCount: quiz.questions.length });
+  runInBackground(async () => {
+    try {
+      const spec = {
+        title: chosenTitle,
+        description,
+        count: count ?? 5,
+        level: user.level,
+        department: user.department,
+        faculty: user.faculty,
+        docText,
+      };
+      const { system, user: userPrompt } = buildQuizPrompt(spec);
+
+      const raw = await generate(userPrompt, { system });
+      const cleaned = parseJsonBlock(raw);
+
+      const quiz = sanitizeQuiz(cleaned);
+      if (quiz.questions.length === 0) throw new Error("No valid questions were generated.");
+
+      await prisma.quiz.update({
+        where: { id: created.id },
+        data: {
+          title: quiz.title,
+          description: quiz.description || null,
+          status: "PUBLISHED",
+          questions: {
+            create: quiz.questions.map((q, i) => ({
+              prompt: q.prompt,
+              options: JSON.stringify(q.options),
+              correctIndex: q.correctIndex,
+              explanation: q.explanation,
+              order: i,
+            })),
+          },
+        },
+      });
+    } catch (err) {
+      await prisma.quiz
+        .update({
+          where: { id: created.id },
+          data: { status: "FAILED", error: (err as Error)?.message || "Quiz generation failed." },
+        })
+        .catch(() => {});
+    }
+  });
+
+  return NextResponse.json({ quizId: created.id, status: "GENERATING" }, { status: 202 });
 }

@@ -5,9 +5,9 @@ import { requireAdmin } from "@/lib/auth";
 import { generate, ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
 import { buildQuizPrompt } from "@/lib/llm";
 import { sanitizeQuiz } from "@/lib/quiz";
+import { runInBackground } from "@/lib/background";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 const createSchema = z.object({
   title: z.string().min(2).max(160),
@@ -32,6 +32,7 @@ export async function GET() {
       title: true,
       description: true,
       status: true,
+      error: true,
       faculty: true,
       department: true,
       program: true,
@@ -58,56 +59,68 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "The AI service is unavailable." }, { status: 503 });
   }
 
-  const spec = {
-    title: d.title,
-    description: d.description,
-    count: d.count ?? 5,
-    level: d.level,
-    department: d.department,
-    faculty: d.faculty,
-    docText: null,
-  };
-  const { system, user: userPrompt } = buildQuizPrompt(spec);
-
-  let cleaned: any;
-  try {
-    const raw = await generate(userPrompt, { system });
-    cleaned = parseJsonBlock(raw);
-  } catch (err) {
-    return NextResponse.json(
-      { error: "Quiz generation failed: " + ((err as Error)?.message || "unknown") },
-      { status: 502 }
-    );
-  }
-
-  const quiz = sanitizeQuiz(cleaned);
-  if (quiz.questions.length === 0) {
-    return NextResponse.json({ error: "No valid questions were generated." }, { status: 502 });
-  }
-
+  // Create the quiz row immediately as GENERATING, then generate in the
+  // background so the response is fast (avoids proxy/Cloudflare timeouts).
   const created = await prisma.quiz.create({
     data: {
-      title: quiz.title,
-      description: quiz.description || null,
+      title: d.title,
+      description: d.description || null,
       creatorId: admin.id,
       isAdminQuiz: true,
-      status: "PUBLISHED",
+      status: "GENERATING",
       faculty: d.faculty?.trim() || null,
       department: d.department?.trim() || null,
       program: d.program?.trim() || null,
       level: d.level?.trim() || null,
       generatedFrom: "topic",
-      questions: {
-        create: quiz.questions.map((q, i) => ({
-          prompt: q.prompt,
-          options: JSON.stringify(q.options),
-          correctIndex: q.correctIndex,
-          explanation: q.explanation,
-          order: i,
-        })),
-      },
     },
   });
 
-  return NextResponse.json({ quizId: created.id, questionCount: quiz.questions.length });
+  runInBackground(async () => {
+    try {
+      const spec = {
+        title: d.title,
+        description: d.description,
+        count: d.count ?? 5,
+        level: d.level,
+        department: d.department,
+        faculty: d.faculty,
+        docText: null,
+      };
+      const { system, user: userPrompt } = buildQuizPrompt(spec);
+
+      const raw = await generate(userPrompt, { system });
+      const cleaned = parseJsonBlock(raw);
+
+      const quiz = sanitizeQuiz(cleaned);
+      if (quiz.questions.length === 0) throw new Error("No valid questions were generated.");
+
+      await prisma.quiz.update({
+        where: { id: created.id },
+        data: {
+          title: quiz.title,
+          description: quiz.description || null,
+          status: "PUBLISHED",
+          questions: {
+            create: quiz.questions.map((q, i) => ({
+              prompt: q.prompt,
+              options: JSON.stringify(q.options),
+              correctIndex: q.correctIndex,
+              explanation: q.explanation,
+              order: i,
+            })),
+          },
+        },
+      });
+    } catch (err) {
+      await prisma.quiz
+        .update({
+          where: { id: created.id },
+          data: { status: "FAILED", error: (err as Error)?.message || "Quiz generation failed." },
+        })
+        .catch(() => {});
+    }
+  });
+
+  return NextResponse.json({ quizId: created.id, status: "GENERATING" }, { status: 202 });
 }

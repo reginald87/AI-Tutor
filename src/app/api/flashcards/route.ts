@@ -5,9 +5,9 @@ import { getCurrentUser, requireVerifiedUser } from "@/lib/auth";
 import { consumePrompt, getPromptState } from "@/lib/prompts";
 import { generate, ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
 import { buildFlashcardPrompt } from "@/lib/llm";
+import { runInBackground } from "@/lib/background";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
 
 const genSchema = z.object({
   title: z.string().max(160).optional(),
@@ -29,6 +29,8 @@ export async function GET() {
       createdAt: true,
       sourceDocId: true,
       sourceQuizId: true,
+      status: true,
+      error: true,
       _count: { select: { cards: true } },
     },
   });
@@ -62,42 +64,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "You have used all your prompts for now.", state }, { status: 429 });
   }
 
-  const { system, user: userPrompt } = buildFlashcardPrompt({
-    title: title || (topic ? `Cards: ${topic}` : "Study cards"),
-    topic: topic || null,
-    docText,
-    count: count ?? 8,
-  });
+  const deckTitle = title?.trim() || (topic ? `Cards: ${topic}` : "Study cards");
 
-  let raw: string;
-  try {
-    raw = await generate(userPrompt, { system });
-  } catch (err) {
-    return NextResponse.json({ error: "Flashcard generation failed: " + ((err as Error)?.message || "") }, { status: 502 });
-  }
-
-  let cleaned: any;
-  try {
-    cleaned = parseJsonBlock(raw);
-  } catch {
-    return NextResponse.json({ error: "The model returned invalid flashcards." }, { status: 502 });
-  }
-
-  const cards = Array.isArray(cleaned?.cards)
-    ? cleaned.cards
-        .map((c: any) => ({ front: String(c?.front || "").trim(), back: String(c?.back || "").trim() }))
-        .filter((c: any) => c.front && c.back)
-    : [];
-  if (cards.length === 0) return NextResponse.json({ error: "No valid flashcards were generated." }, { status: 502 });
-
+  // Create the deck first as GENERATING, then fill it in the background. This
+  // keeps the HTTP response fast so Cloudflare/nginx never cut it off mid-job.
   const deck = await prisma.flashcardDeck.create({
     data: {
       userId: user.id,
-      title: String(cleaned?.title || title || "Study cards").slice(0, 160),
+      title: deckTitle.slice(0, 160),
       sourceDocId: fromDoc || null,
-      cards: { create: cards },
+      status: "GENERATING",
     },
   });
 
-  return NextResponse.json({ deckId: deck.id, cardCount: cards.length });
+  runInBackground(async () => {
+    try {
+      const { system, user: userPrompt } = buildFlashcardPrompt({
+        title: deckTitle,
+        topic: topic || null,
+        docText,
+        count: count ?? 8,
+      });
+
+      const raw = await generate(userPrompt, { system });
+      const cleaned: any = parseJsonBlock(raw);
+
+      const cards = Array.isArray(cleaned?.cards)
+        ? cleaned.cards
+            .map((c: any) => ({ front: String(c?.front || "").trim(), back: String(c?.back || "").trim() }))
+            .filter((c: any) => c.front && c.back)
+        : [];
+      if (cards.length === 0) throw new Error("No valid flashcards were generated.");
+
+      await prisma.flashcardDeck.update({
+        where: { id: deck.id },
+        data: {
+          title: String(cleaned?.title || deckTitle).slice(0, 160),
+          status: "PUBLISHED",
+          cards: { create: cards },
+        },
+      });
+    } catch (err) {
+      await prisma.flashcardDeck
+        .update({
+          where: { id: deck.id },
+          data: { status: "FAILED", error: (err as Error)?.message || "Flashcard generation failed." },
+        })
+        .catch(() => {});
+    }
+  });
+
+  return NextResponse.json({ deckId: deck.id, status: "GENERATING" }, { status: 202 });
 }

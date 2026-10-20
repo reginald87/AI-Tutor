@@ -27,7 +27,7 @@ export default function LandingPage() {
           Bayelsa Medical University
         </span>
         <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-bold leading-tight sm:text-6xl">
-          Your AI learning companion, built for medical students.
+          Your AI learning companion, built for the Bayelsa Medical University Students.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-white/70">
           Chat with your lecture notes, generate quizzes from any document, and test your

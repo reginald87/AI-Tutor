@@ -115,7 +115,9 @@ model Quiz {
   // Provenance
   sourceDocId   String?
   generatedFrom String? // 'document' | 'topic' | 'manual'
-  status        String   @default("DRAFT") // DRAFT | PUBLISHED
+  status        String   @default("DRAFT") // DRAFT | PUBLISHED | GENERATING | FAILED
+  // Set when async background generation fails (status = FAILED).
+  error    String?
 
   questions     Question[]
   attempts      Attempt[]
@@ -211,6 +213,10 @@ model FlashcardDeck {
   title       String
   sourceDocId String?
   sourceQuizId String?
+  // GENERATING (async job in progress) | PUBLISHED (ready) | FAILED (generation error)
+  status      String   @default("PUBLISHED")
+  // Error detail when status = FAILED.
+  error       String?
   createdAt   DateTime @default(now())
 
   cards Flashcard[]

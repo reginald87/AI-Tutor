@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiGet, apiPost, pollUntil } from "@/lib/api";
 
 export default function QuizzesPage() {
   const { prompts, refresh } = useAuth();
@@ -49,12 +49,22 @@ export default function QuizzesPage() {
     }
     setBusy(true);
     try {
-      const res = await apiPost("/api/quizzes", {
+      const res = await apiPost<{ quizId: string }>("/api/quizzes", {
         title: title || undefined,
         topic: topic || undefined,
         fromDoc: fromDoc || undefined,
         count,
       });
+      setError("Generating quiz… this can take a few minutes on the server.");
+      await pollUntil(async () => {
+        const data = await apiGet("/api/quizzes");
+        const quiz = (data.own || []).find((q: any) => q.id === res.quizId);
+        if (quiz?.status === "FAILED") {
+          throw new Error(quiz.error || "Quiz generation failed. Please try again.");
+        }
+        return quiz?.status === "PUBLISHED";
+      });
+      setError("");
       await refresh();
       router.push(`/dashboard/quizzes/${res.quizId}`);
     } catch (err: any) {
@@ -163,23 +173,34 @@ export default function QuizzesPage() {
             </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+<div className="grid gap-3 sm:grid-cols-2">
             {(tab === "mine" ? own : available).map((q) => {
               const best = q.attempts?.[0];
-              return (
-                <Link
-                  key={q.id}
-                  href={`/dashboard/quizzes/${q.id}`}
-                  className="card block p-4 transition hover:border-brand-300 hover:shadow"
-                >
+              const item = (
+                <>
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold text-slate-800">{q.title}</h3>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-                      {q._count?.questions ?? 0} Q
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {q.status === "GENERATING" && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          Generating…
+                        </span>
+                      )}
+                      {q.status === "FAILED" && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                          Failed
+                        </span>
+                      )}
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                        {q._count?.questions ?? 0} Q
+                      </span>
+                    </div>
                   </div>
                   {q.description && (
                     <p className="mt-1 line-clamp-2 text-sm text-slate-500">{q.description}</p>
+                  )}
+                  {q.status === "FAILED" && q.error && (
+                    <p className="mt-1 text-xs text-red-500">{q.error}</p>
                   )}
                   {tab === "available" && (
                     <p className="mt-1 text-xs text-slate-400">
@@ -188,16 +209,34 @@ export default function QuizzesPage() {
                     </p>
                   )}
                   <div className="mt-3 text-xs font-medium">
-                    {best ? (
-                      <span className="text-brand-600">
-                        Best score: {best.percentage}% ·{" "}
-                        {new Date(best.completedAt).toLocaleDateString()}
-                      </span>
+                    {q.status === "PUBLISHED" ? (
+                      best ? (
+                        <span className="text-brand-600">
+                          Best score: {best.percentage}% ·{" "}
+                          {new Date(best.completedAt).toLocaleDateString()}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">Not attempted yet →</span>
+                      )
                     ) : (
-                      <span className="text-slate-400">Not attempted yet →</span>
+                      <span className="text-slate-400">…</span>
                     )}
                   </div>
+                </>
+              );
+              const publishable = q.status === "PUBLISHED";
+              return publishable ? (
+                <Link
+                  key={q.id}
+                  href={`/dashboard/quizzes/${q.id}`}
+                  className="card block p-4 transition hover:border-brand-300 hover:shadow"
+                >
+                  {item}
                 </Link>
+              ) : (
+                <div key={q.id} className="card block p-4">
+                  {item}
+                </div>
               );
             })}
             {(tab === "mine" ? own : available).length === 0 && (

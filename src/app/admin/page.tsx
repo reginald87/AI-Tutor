@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { apiGet, apiPost, apiPatch, apiDelete, pollUntil } from "@/lib/api";
 
 type Tab =
   | "overview"
@@ -539,7 +539,17 @@ function QuizzesTab() {
     }
     setBusy(true);
     try {
-      await apiPost("/api/admin/quizzes", form);
+      const res = await apiPost<{ quizId: string }>("/api/admin/quizzes", form);
+      setError("Generating quiz… this can take a few minutes on the server.");
+      await pollUntil(async () => {
+        const d = await apiGet("/api/admin/quizzes");
+        const quiz = (d.quizzes || []).find((q: any) => q.id === res.quizId);
+        if (quiz?.status === "FAILED") {
+          throw new Error(quiz.error || "Quiz generation failed. Please try again.");
+        }
+        return quiz?.status === "PUBLISHED";
+      });
+      setError("");
       setForm({ title: "", topic: "", count: 5, faculty: "", department: "", program: "", level: "" });
       load();
     } catch (e: any) {
@@ -649,20 +659,35 @@ function QuizzesTab() {
                     className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                       q.status === "PUBLISHED"
                         ? "bg-green-100 text-green-700"
-                        : "bg-slate-100 text-slate-500"
+                        : q.status === "GENERATING"
+                          ? "bg-amber-100 text-amber-700"
+                          : q.status === "FAILED"
+                            ? "bg-red-100 text-red-700"
+                            : "bg-slate-100 text-slate-500"
                     }`}
                   >
-                    {q.status}
+                    {q.status === "GENERATING"
+                      ? "Generating…"
+                      : q.status === "FAILED"
+                        ? "Failed"
+                        : q.status}
                   </span>
+                  {q.status === "FAILED" && q.error && (
+                    <span className="block text-xs text-red-500" title={q.error}>
+                      {q.error}
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex gap-1">
-                    <button
-                      onClick={() => toggle(q.id, q.status)}
-                      className="btn-outline px-2 py-1 text-xs"
-                    >
-                      {q.status === "PUBLISHED" ? "Unpublish" : "Publish"}
-                    </button>
+                    {(q.status === "PUBLISHED" || q.status === "DRAFT") && (
+                      <button
+                        onClick={() => toggle(q.id, q.status)}
+                        className="btn-outline px-2 py-1 text-xs"
+                      >
+                        {q.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+                      </button>
+                    )}
                     <button
                       onClick={() => remove(q.id)}
                       className="btn px-2 py-1 text-xs text-red-600 hover:bg-red-50"

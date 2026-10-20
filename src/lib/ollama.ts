@@ -101,9 +101,10 @@ export async function generate(
       keep_alive: 1800,
       options: { temperature: opts.temperature ?? 0.4, num_ctx: 6144, num_predict: 2048 },
     }),
-    // Fail with a clear error instead of hanging forever. 240s < nginx's 300s
-    // proxy_read_timeout, so nginx won't 504 before this fires.
-    signal: opts.signal ?? AbortSignal.timeout(240_000),
+    // Fail with a clear error instead of hanging forever. Generation now runs
+    // as a background job and clients poll for up to 9 minutes, so this matches
+    // that window (8 min) and marks the row FAILED on expiry.
+    signal: opts.signal ?? AbortSignal.timeout(480_000),
   });
 
   if (!res.ok) {
