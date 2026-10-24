@@ -149,8 +149,9 @@ model Setting {
   provider              String   @default("ollama")
   openaiApiKey          String?
   anthropicApiKey       String?
-  openrouterApiKey      String?
+  openrouterApiKey     String?
   googleApiKey          String?
+  deepseekApiKey        String?
   customApiBase         String?
   customApiKey          String?
   customModel           String?

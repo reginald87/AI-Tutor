@@ -725,6 +725,7 @@ function SettingsTab() {
     anthropicApiKey: "",
     openrouterApiKey: "",
     googleApiKey: "",
+    deepseekApiKey: "",
     customApiBase: "",
     customApiKey: "",
     customModel: "",
@@ -746,6 +747,7 @@ function SettingsTab() {
           anthropicApiKey: d.setting?.anthropicApiKey ?? "",
           openrouterApiKey: d.setting?.openrouterApiKey ?? "",
           googleApiKey: d.setting?.googleApiKey ?? "",
+          deepseekApiKey: (d.setting as any)?.deepseekApiKey ?? "",
           customApiBase: d.setting?.customApiBase ?? "",
           customApiKey: d.setting?.customApiKey ?? "",
           customModel: d.setting?.customModel ?? "",
@@ -808,6 +810,7 @@ function SettingsTab() {
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openrouter">OpenRouter</option>
               <option value="google">Google Gemini</option>
+              <option value="deepseek">DeepSeek</option>
               <option value="custom">Custom API (OpenAI compatible)</option>
             </select>
           </div>
@@ -887,6 +890,16 @@ function SettingsTab() {
                   onChange={(e) => setForm({ ...form, googleApiKey: e.target.value })}
                   className="input"
                   placeholder="AIza..."
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">DeepSeek API Key</label>
+                <input
+                  type="password"
+                  value={(form as any).deepseekApiKey || ""}
+                  onChange={(e) => setForm({ ...form, deepseekApiKey: e.target.value } as any)}
+                  className="input"
+                  placeholder="sk-..."
                 />
               </div>
             </>
