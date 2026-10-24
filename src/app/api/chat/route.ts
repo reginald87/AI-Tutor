@@ -148,6 +148,16 @@ export async function POST(req: NextRequest) {
         }
         const next = newRaw.slice(emitted);
         if (next) {
+          // Don't emit metadata sentinel
+          if (next.includes(META_SENTINEL)) {
+            const idx = next.indexOf(META_SENTINEL);
+            const before = next.slice(0, idx);
+            if (before) {
+              controller.enqueue(encoder.encode(before));
+            }
+            emitted = newRaw.length;
+            return;
+          }
           controller.enqueue(encoder.encode(next));
           emitted = newRaw.length;
         }
@@ -163,7 +173,9 @@ export async function POST(req: NextRequest) {
           if (stripped.confidence) confidence = stripped.confidence;
           const cleanAll = stripped.confidence ? stripped.text : raw;
           const tail = cleanAll.slice(emitted);
-          if (tail) controller.enqueue(encoder.encode(tail));
+          if (tail && !tail.includes(META_SENTINEL)) {
+            controller.enqueue(encoder.encode(tail));
+          }
           emitted = cleanAll.length;
         }
 

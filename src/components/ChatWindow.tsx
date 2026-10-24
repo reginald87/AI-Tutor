@@ -329,28 +329,31 @@ export default function ChatWindow() {
         setInput(transcript);
         if (autoSendTimeoutRef.current) {
           clearTimeout(autoSendTimeoutRef.current);
-          autoSendTimeoutRef.current = null;
         }
         autoSendTimeoutRef.current = setTimeout(() => {
-          const text = transcript.trim();
-          if (text && !busy) {
-            if (autoSendTimeoutRef.current) {
-              clearTimeout(autoSendTimeoutRef.current);
-              autoSendTimeoutRef.current = null;
+          setInput((currentInput) => {
+            const text = (currentInput || transcript).trim();
+            if (text && !busy && !prompts?.exhausted) {
+              if (autoSendTimeoutRef.current) {
+                clearTimeout(autoSendTimeoutRef.current);
+                autoSendTimeoutRef.current = null;
+              }
+              try {
+                recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
+              } catch {}
+              setListening(false);
+              // Use a small delay to ensure state is updated
+              setTimeout(() => {
+                sendMessage();
+              }, 0);
+            } else {
+              if (autoSendTimeoutRef.current) {
+                clearTimeout(autoSendTimeoutRef.current);
+                autoSendTimeoutRef.current = null;
+              }
             }
-            try {
-              recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
-            } catch {}
-            setListening(false);
-            if (!prompts?.exhausted) {
-              sendMessage();
-            }
-          } else {
-            if (autoSendTimeoutRef.current) {
-              clearTimeout(autoSendTimeoutRef.current);
-              autoSendTimeoutRef.current = null;
-            }
-          }
+            return currentInput || transcript;
+          });
         }, 2000);
       };
       rec.onend = () => {
