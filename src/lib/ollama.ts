@@ -10,6 +10,12 @@ export interface ChatOptions {
   model?: string;
   temperature?: number;
   signal?: AbortSignal;
+  numCtx?: number;
+  numPredict?: number;
+  format?: "json" | string;
+  keepAlive?: string | number;
+  topP?: number;
+  topK?: number;
 }
 
 export async function getActiveModel(): Promise<string> {
@@ -44,8 +50,14 @@ export async function* chatStream(
       messages,
       stream: true,
       // Keep the model resident so the next request doesn't pay the load penalty.
-      keep_alive: 1800,
-      options: { temperature: opts.temperature ?? 0.7, num_ctx: 4096, num_predict: 1024 },
+      keep_alive: opts.keepAlive ?? 1800,
+      options: {
+        temperature: opts.temperature ?? 0.7,
+        num_ctx: opts.numCtx ?? 4096,
+        num_predict: opts.numPredict ?? 1024,
+        top_p: opts.topP ?? 0.9,
+        top_k: opts.topK ?? 40,
+      },
     }),
     signal: opts.signal,
   });
@@ -96,10 +108,16 @@ export async function generate(
       prompt,
       system: opts.system,
       stream: false,
-      format: "json",
+      format: opts.format ?? "json",
       // Keep the model resident; model load is the biggest cost on small VPS CPUs.
-      keep_alive: 1800,
-      options: { temperature: opts.temperature ?? 0.4, num_ctx: 6144, num_predict: 2048 },
+      keep_alive: opts.keepAlive ?? 1800,
+      options: {
+        temperature: opts.temperature ?? 0.25,
+        num_ctx: opts.numCtx ?? 4096,
+        num_predict: opts.numPredict ?? 1024,
+        top_p: opts.topP ?? 0.9,
+        top_k: opts.topK ?? 40,
+      },
     }),
     // Fail with a clear error instead of hanging forever. Generation now runs
     // as a background job and clients poll for up to 9 minutes, so this matches

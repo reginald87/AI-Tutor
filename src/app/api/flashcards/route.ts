@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         count: count ?? 8,
       });
 
-      const raw = await generate(userPrompt, { system });
+      const raw = await generate(userPrompt, { system, temperature: 0.2, numPredict: 768, numCtx: 4096 });
       const cleaned: any = parseJsonBlock(raw);
 
       const cards = Array.isArray(cleaned?.cards)

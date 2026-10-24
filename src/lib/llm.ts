@@ -1,4 +1,5 @@
 import { CONFIG } from "./config";
+import { retrieveRelevantChunks } from "./retrieve";
 
 export const TUTOR_SYSTEM = `You are ${CONFIG.appName}, the official AI learning companion for Bayelsa Medical University (BMU) students.
 
@@ -20,10 +21,29 @@ export interface QuizSpec {
   docText?: string | null;
 }
 
+function trimDocForGeneration(docText: string | null | undefined, query?: string): string | null {
+  if (!docText) return null;
+  const trimmed = docText.trim();
+  if (!trimmed) return null;
+  // If doc is small, use as-is
+  if (trimmed.length <= 8000) return trimmed;
+  // Prefer relevant chunks to reduce context
+  const q = query?.trim() || "exam questions key concepts definitions";
+  const joined = retrieveRelevantChunks(trimmed, q, { maxChunks: 6, maxChars: 9000 });
+  if (joined && joined.trim().length >= 200) {
+    return joined.slice(0, 9000);
+  }
+  // Fallback: take start + end
+  const head = trimmed.slice(0, 6000);
+  const tail = trimmed.slice(-2000);
+  return `${head}\n\n[...]\n\n${tail}`.slice(0, 9000);
+}
+
 export function buildQuizPrompt(spec: QuizSpec): { system: string; user: string } {
   const count = Math.min(Math.max(spec.count ?? 5, 1), 20);
-  const context = spec.docText
-    ? `Use the following lecture notes as the SOLE source of questions:\n\n"""\n${spec.docText}\n"""`
+  const contextText = trimDocForGeneration(spec.docText, spec.title || spec.description || "quiz questions");
+  const context = contextText
+    ? `Use the following lecture notes as the SOLE source of questions:\n\n"""\n${contextText}\n"""`
     : `Create general ${spec.department ? spec.department + " " : ""}questions appropriate for a ${
         spec.level || "university"
       } level health-sciences student.`;
@@ -47,13 +67,28 @@ Rules:
 - Each question has exactly 4 options and exactly one correct answer.
 - "correctIndex" is the zero-based index of the correct option.
 - "explanation" must justify the correct answer briefly.
-- Do not include any text outside the JSON.`;
+- Do not include markdown fences or any text outside the JSON.`;
 
   const user = `${context}\n\nGenerate ${count} questions.${
     spec.title ? `\nTitle suggestion: ${spec.title}.` : ""
   }`;
 
   return { system: sys, user };
+}
+
+function trimDocForFlashcards(docText: string | null | undefined, query?: string): string | null {
+  if (!docText) return null;
+  const trimmed = docText.trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= 6000) return trimmed;
+  const q = query?.trim() || "key terms definitions concepts flashcards";
+  const joined = retrieveRelevantChunks(trimmed, q, { maxChunks: 5, maxChars: 7000 });
+  if (joined && joined.trim().length >= 200) {
+    return joined.slice(0, 7000);
+  }
+  const head = trimmed.slice(0, 4500);
+  const tail = trimmed.slice(-1500);
+  return `${head}\n\n[...]\n\n${tail}`.slice(0, 7000);
 }
 
 export function buildFlashcardPrompt(spec: {
@@ -63,8 +98,9 @@ export function buildFlashcardPrompt(spec: {
   topic?: string | null;
 }): { system: string; user: string } {
   const count = Math.min(Math.max(spec.count ?? 8, 1), 30);
-  const context = spec.docText
-    ? `Use the following lecture notes as the SOLE source:\n\n"""\n${spec.docText}\n"""`
+  const contextText = trimDocForFlashcards(spec.docText, spec.title || spec.topic || "flashcards");
+  const context = contextText
+    ? `Use the following lecture notes as the SOLE source:\n\n"""\n${contextText}\n"""`
     : `Create general study flashcards appropriate for a health-sciences student${
         spec.topic ? ` about: ${spec.topic}` : ""
       }.`;
@@ -81,7 +117,7 @@ Rules:
 - Provide exactly ${count} flashcards.
 - "front" is a concise question or term.
 - "back" is the answer/definition, brief and accurate.
-- Do not include any text outside the JSON.`;
+- Do not include markdown fences or any text outside the JSON.`;
 
   const user = `${context}\n\nGenerate ${count} flashcards.${
     spec.title ? `\nDeck title suggestion: ${spec.title}.` : ""
