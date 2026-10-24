@@ -323,12 +323,13 @@ export default function ChatWindow() {
       rec.onresult = (e: any) => {
         gotResult = true;
         let transcript = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
+        for (let i = 0; i < e.results.length; i++) {
           transcript += e.results[i][0].transcript;
         }
         setInput(transcript);
         if (autoSendTimeoutRef.current) {
           clearTimeout(autoSendTimeoutRef.current);
+          autoSendTimeoutRef.current = null;
         }
         autoSendTimeoutRef.current = setTimeout(() => {
           const text = transcript.trim();
@@ -344,21 +345,30 @@ export default function ChatWindow() {
             if (!prompts?.exhausted) {
               sendMessage();
             }
+          } else {
+            if (autoSendTimeoutRef.current) {
+              clearTimeout(autoSendTimeoutRef.current);
+              autoSendTimeoutRef.current = null;
+            }
           }
         }, 2000);
       };
       rec.onend = () => {
         setListening(false);
-        if (autoSendTimeoutRef.current) {
-          clearTimeout(autoSendTimeoutRef.current);
-          autoSendTimeoutRef.current = null;
-        }
         // If we started in continuous mode but got no results and it ended immediately, try non-continuous fallback
         if (useContinuous && !triedFallback && !gotResult) {
+          if (autoSendTimeoutRef.current) {
+            clearTimeout(autoSendTimeoutRef.current);
+            autoSendTimeoutRef.current = null;
+          }
           try {
             startRecognition(false, true);
             return;
           } catch {}
+        }
+        if (autoSendTimeoutRef.current) {
+          clearTimeout(autoSendTimeoutRef.current);
+          autoSendTimeoutRef.current = null;
         }
       };
       rec.onerror = (e: any) => {
