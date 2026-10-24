@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -42,6 +42,7 @@ export default function ChatWindow() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  const autoSendTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load initial data + optional ?chat= query.
   // Reset everything when the signed-in user changes so one account never
@@ -274,31 +275,121 @@ export default function ChatWindow() {
 
   // ---- STT ----
   function toggleListen() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || (window as any).msSpeechRecognition;
     if (!SR) {
-      setError("Speech input is not supported in this browser.");
+      setError("Speech input is not supported in this browser. Try Microsoft Edge (Chromium), Chrome, or ensure you're on HTTPS/localhost.");
       return;
     }
     if (listening) {
-      recognitionRef.current?.stop();
+      if (autoSendTimeoutRef.current) {
+        clearTimeout(autoSendTimeoutRef.current);
+        autoSendTimeoutRef.current = null;
+      }
+      try {
+        recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
+      } catch {}
       setListening(false);
       return;
     }
-    const rec = new SR();
-    rec.lang = "en-NG";
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.onresult = (e: any) => {
-      let transcript = "";
-      for (let i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
-      setInput(transcript);
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recognitionRef.current = rec;
-    rec.start();
-    setListening(true);
+    // Request mic permission first for better compatibility on some devices
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function") {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          // Stop the tracks immediately; we just needed permission
+          stream.getTracks().forEach((t) => t.stop());
+          startRecognition();
+        })
+        .catch(() => {
+          setError("Microphone permission denied or unavailable. Check browser permissions and Bluetooth mic (set it as default input).");
+        });
+    } else {
+      startRecognition();
+    }
   }
+
+  function startRecognition() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || (window as any).msSpeechRecognition;
+    if (!SR) {
+      setError("Speech input is not supported in this browser. Try Microsoft Edge, Chrome, or Chromium-based browsers.");
+      return;
+    }
+    try {
+      const rec = new SR();
+      rec.lang = "en-US";
+      rec.interimResults = true;
+      rec.continuous = true;
+      if (typeof rec.maxAlternatives !== "undefined") {
+        rec.maxAlternatives = 1;
+      }
+
+      rec.onresult = (e: any) => {
+        let transcript = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          transcript += e.results[i][0].transcript;
+        }
+        setInput(transcript);
+        if (autoSendTimeoutRef.current) {
+          clearTimeout(autoSendTimeoutRef.current);
+        }
+        autoSendTimeoutRef.current = setTimeout(() => {
+          const text = transcript.trim();
+          if (text && !busy) {
+            if (autoSendTimeoutRef.current) {
+              clearTimeout(autoSendTimeoutRef.current);
+              autoSendTimeoutRef.current = null;
+            }
+            try {
+              recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
+            } catch {}
+            setListening(false);
+            if (!prompts?.exhausted) {
+              sendMessage();
+            }
+          }
+        }, 2000);
+      };
+      rec.onend = () => {
+        setListening(false);
+        if (autoSendTimeoutRef.current) {
+          clearTimeout(autoSendTimeoutRef.current);
+          autoSendTimeoutRef.current = null;
+        }
+      };
+      rec.onerror = (e: any) => {
+        setListening(false);
+        if (autoSendTimeoutRef.current) {
+          clearTimeout(autoSendTimeoutRef.current);
+          autoSendTimeoutRef.current = null;
+        }
+        if (e?.error === "not-allowed") {
+          setError("Microphone permission denied. Allow mic access in browser settings.");
+        } else if (e?.error === "no-speech") {
+          // ignore common no-speech errors
+        } else if (e?.error === "audio-capture") {
+          setError("No microphone found. If using Bluetooth, ensure it's connected and set as default mic.");
+        } else {
+          setError("Speech recognition error. Try again or use a different browser.");
+        }
+      };
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
+      setError("");
+    } catch (err) {
+      setError("Could not start speech input.");
+      setListening(false);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (autoSendTimeoutRef.current) {
+        clearTimeout(autoSendTimeoutRef.current);
+      }
+      recognitionRef.current?.stop?.();
+    };
+  }, []);
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-screen">
