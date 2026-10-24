@@ -16,11 +16,17 @@ export interface ChatOptions {
   keepAlive?: string | number;
   topP?: number;
   topK?: number;
+  useFastModel?: boolean;
 }
 
 export async function getActiveModel(): Promise<string> {
   const s = await prisma.setting.findUnique({ where: { id: "global" } });
   return s?.defaultModel || CONFIG.ollamaModel;
+}
+
+export async function getFastModel(): Promise<string> {
+  const s = await prisma.setting.findUnique({ where: { id: "global" } });
+  return (s as any)?.fastModel || CONFIG.ollamaFastModel || s?.defaultModel || CONFIG.ollamaModel;
 }
 
 export async function ollamaHealthy(): Promise<boolean> {
@@ -99,7 +105,7 @@ export async function generate(
   prompt: string,
   opts: ChatOptions & { system?: string } = {}
 ): Promise<string> {
-  const model = opts.model || (await getActiveModel());
+  const model = opts.model || (opts.useFastModel ? await getFastModel() : await getActiveModel());
   const res = await fetch(`${CONFIG.ollamaHost}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

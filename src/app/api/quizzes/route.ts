@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
       };
       const { system, user: userPrompt } = buildQuizPrompt(spec);
 
-      const raw = await generate(userPrompt, { system, temperature: 0.2, numPredict: 1024, numCtx: 4096 });
+      const raw = await generate(userPrompt, { system, temperature: 0.2, numPredict: 1024, numCtx: 4096, useFastModel: true });
       const cleaned = parseJsonBlock(raw);
 
       const quiz = sanitizeQuiz(cleaned);

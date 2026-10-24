@@ -21,6 +21,7 @@ export const CONFIG = {
   },
   ollamaHost: process.env.OLLAMA_HOST || "http://localhost:11434",
   ollamaModel: process.env.OLLAMA_MODEL || "llama3.2:latest",
+  ollamaFastModel: process.env.OLLAMA_FAST_MODEL || process.env.OLLAMA_MODEL || "llama3.2:latest",
   appName: process.env.NEXT_PUBLIC_APP_NAME || "BMU AI Tutor",
   maxUploadBytes: 15 * 1024 * 1024, // 15 MB
   // Hard cap on document context sent to the model to keep responses fast.
