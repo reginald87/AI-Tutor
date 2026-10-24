@@ -22,6 +22,9 @@ export default function ChatWindow() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  useEffect(() => {
+    inputRef.current = input;
+  }, [input]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [documents, setDocuments] = useState<any[]>([]);
@@ -38,11 +41,17 @@ export default function ChatWindow() {
   const [imageName, setImageName] = useState<string>("");
   const imageRef = useRef<HTMLInputElement>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [wakeListening, setWakeListening] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  const wakeRecognitionRef = useRef<any>(null);
   const autoSendTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<string>("");
+  const voiceModeRef = useRef(false);
+  const wakeListeningRef = useRef(false);
 
   // Load initial data + optional ?chat= query.
   // Reset everything when the signed-in user changes so one account never
@@ -86,6 +95,14 @@ export default function ChatWindow() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+
+  useEffect(() => {
+    wakeListeningRef.current = wakeListening;
+  }, [wakeListening]);
+
   async function loadChat(id: string) {
     setError("");
     try {
@@ -108,29 +125,38 @@ export default function ChatWindow() {
     window.history.replaceState(null, "", "/dashboard/chat");
   }
 
-  async function sendMessage() {
-    const text = input.trim();
-    if ((!text && !image) || busy) return;
+  async function sendMessage(overrideText?: string) {
+    const text = (overrideText !== undefined ? overrideText : input).trim();
+    const hasImage = !!image;
+    if ((!text && !hasImage) || busy) return;
     if (prompts?.exhausted) {
       setError("You have no prompts left. They refill daily and weekly.");
       return;
     }
 
     setError("");
-    setInput("");
+    if (overrideText === undefined) {
+      setInput("");
+    }
     const userMsg: Msg = {
       id: `u-${Date.now()}`,
       role: "user",
       content: text,
-      image: image || undefined,
+      image: hasImage ? image || undefined : undefined,
     };
     const assistantMsg: Msg = { id: `a-${Date.now()}`, role: "assistant", content: "" };
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setBusy(true);
 
-    const sentImage = image;
-    setImage(null);
-    setImageName("");
+    const sentImage = hasImage ? image : null;
+    if (hasImage && overrideText === undefined) {
+      setImage(null);
+      setImageName("");
+    } else if (hasImage) {
+      // If sending with override, clear image too
+      setImage(null);
+      setImageName("");
+    }
 
     try {
       const res = await fetch("/api/chat", {
@@ -331,29 +357,24 @@ export default function ChatWindow() {
           clearTimeout(autoSendTimeoutRef.current);
         }
         autoSendTimeoutRef.current = setTimeout(() => {
-          setInput((currentInput) => {
-            const text = (currentInput || transcript).trim();
-            if (text && !busy && !prompts?.exhausted) {
-              if (autoSendTimeoutRef.current) {
-                clearTimeout(autoSendTimeoutRef.current);
-                autoSendTimeoutRef.current = null;
-              }
-              try {
-                recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
-              } catch {}
-              setListening(false);
-              // Use a small delay to ensure state is updated
-              setTimeout(() => {
-                sendMessage();
-              }, 0);
-            } else {
-              if (autoSendTimeoutRef.current) {
-                clearTimeout(autoSendTimeoutRef.current);
-                autoSendTimeoutRef.current = null;
-              }
+          const finalText = ((inputRef.current ?? transcript) || "").trim();
+          if (finalText && !prompts?.exhausted) {
+            if (autoSendTimeoutRef.current) {
+              clearTimeout(autoSendTimeoutRef.current);
+              autoSendTimeoutRef.current = null;
             }
-            return currentInput || transcript;
-          });
+            try {
+              recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
+            } catch {}
+            setListening(false);
+            setInput("");
+            sendMessage(finalText);
+          } else {
+            if (autoSendTimeoutRef.current) {
+              clearTimeout(autoSendTimeoutRef.current);
+              autoSendTimeoutRef.current = null;
+            }
+          }
         }, 2000);
       };
       rec.onend = () => {
@@ -372,6 +393,13 @@ export default function ChatWindow() {
         if (autoSendTimeoutRef.current) {
           clearTimeout(autoSendTimeoutRef.current);
           autoSendTimeoutRef.current = null;
+        }
+        if (voiceModeRef.current && !wakeListeningRef.current) {
+          setTimeout(() => {
+            if (voiceModeRef.current && !listening) {
+              startWakeWordListener();
+            }
+          }, 400);
         }
       };
       rec.onerror = (e: any) => {
@@ -406,6 +434,14 @@ export default function ChatWindow() {
             return;
           } catch {}
         }
+        if (voiceModeRef.current) {
+          setTimeout(() => {
+            if (voiceModeRef.current && !listening) {
+              startWakeWordListener();
+            }
+          }, 800);
+          return;
+        }
         setError(`Speech recognition error (${err || "unknown"}). Try again or use Microsoft Edge/Chrome over HTTPS.`);
       };
       recognitionRef.current = rec;
@@ -427,12 +463,120 @@ export default function ChatWindow() {
     }
   }
 
+  const WAKE_WORDS = ["hey tutor", "hi tutor", "hello tutor", "ai tutor", "hey ai tutor", "hello ai tutor", "ok tutor"];
+
+  function startWakeWordListener() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || (window as any).msSpeechRecognition;
+    if (!SR) return;
+    if (typeof window !== "undefined" && !window.isSecureContext && location.hostname !== "localhost") return;
+    if (wakeRecognitionRef.current) {
+      try {
+        wakeRecognitionRef.current.abort?.();
+      } catch {}
+    }
+    try {
+      const rec = new SR();
+      rec.lang = "en-US";
+      rec.interimResults = true;
+      rec.continuous = true;
+      if (typeof rec.maxAlternatives !== "undefined") rec.maxAlternatives = 1;
+
+      rec.onstart = () => {
+        setWakeListening(true);
+      };
+
+      rec.onresult = (e: any) => {
+        let transcript = "";
+        for (let i = e.resultIndex >= 0 ? e.resultIndex : 0; i < e.results.length; i++) {
+          transcript += e.results[i][0].transcript;
+        }
+        const lower = transcript.toLowerCase();
+        if (WAKE_WORDS.some((w) => lower.includes(w))) {
+          try {
+            wakeRecognitionRef.current?.abort?.();
+          } catch {}
+          setWakeListening(false);
+          if (!voiceModeRef.current) {
+            setVoiceMode(true);
+          }
+          setTimeout(() => {
+            startRecognition(true);
+          }, 100);
+        }
+      };
+
+      rec.onend = () => {
+        setWakeListening(false);
+        if (voiceModeRef.current) {
+          setTimeout(() => {
+            if (voiceModeRef.current && !listening) {
+              startWakeWordListener();
+            }
+          }, 500);
+        }
+      };
+
+      rec.onerror = () => {
+        setWakeListening(false);
+        if (voiceModeRef.current) {
+          setTimeout(() => {
+            if (voiceModeRef.current && !listening) {
+              startWakeWordListener();
+            }
+          }, 1000);
+        }
+      };
+
+      wakeRecognitionRef.current = rec;
+      rec.start();
+    } catch {
+      setWakeListening(false);
+    }
+  }
+
+  function toggleVoiceMode() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || (window as any).msSpeechRecognition;
+    if (!SR) {
+      setError("Speech input is not supported in this browser. Try Microsoft Edge, Chrome, or Chromium-based browsers.");
+      return;
+    }
+    if (typeof window !== "undefined" && !window.isSecureContext && location.hostname !== "localhost") {
+      setError("Speech recognition requires a secure context (HTTPS). Open this site over HTTPS.");
+      return;
+    }
+    if (voiceMode) {
+      setVoiceMode(false);
+      try {
+        wakeRecognitionRef.current?.abort?.();
+      } catch {}
+      setWakeListening(false);
+      if (listening) {
+        if (autoSendTimeoutRef.current) {
+          clearTimeout(autoSendTimeoutRef.current);
+          autoSendTimeoutRef.current = null;
+        }
+        try {
+          recognitionRef.current?.abort?.() || recognitionRef.current?.stop?.();
+        } catch {}
+        setListening(false);
+      }
+      return;
+    }
+    setVoiceMode(true);
+    startWakeWordListener();
+  }
+
   useEffect(() => {
     return () => {
       if (autoSendTimeoutRef.current) {
         clearTimeout(autoSendTimeoutRef.current);
       }
-      recognitionRef.current?.stop?.();
+      try {
+        recognitionRef.current?.stop?.();
+      } catch {}
+      try {
+        wakeRecognitionRef.current?.abort?.();
+      } catch {}
     };
   }, []);
 
@@ -739,6 +883,13 @@ export default function ChatWindow() {
             >
               {listening ? "● Listening" : "🎤"}
             </button>
+            <button
+              onClick={toggleVoiceMode}
+              title={voiceMode ? "Exit voice mode (say 'Hey Tutor')" : "Enter voice mode - say 'Hey Tutor'"}
+              className={`btn ${voiceMode ? "bg-brand-600 text-white" : "btn-outline"} px-3`}
+            >
+              {voiceMode ? (wakeListening ? "● Wake" : "🎙 Voice") : "🗣 Voice Mode"}
+            </button>
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -758,7 +909,7 @@ export default function ChatWindow() {
               disabled={busy || !!prompts?.exhausted}
             />
             <button
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={busy || (!input.trim() && !image)}
               className="btn-primary px-4"
             >

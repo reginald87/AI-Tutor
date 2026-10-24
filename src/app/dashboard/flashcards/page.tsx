@@ -192,17 +192,33 @@ export default function FlashcardsPage() {
                     <span>{activeDeck.title}</span>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-6">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">Front</p>
-                    <p className="mt-2 text-lg font-medium text-slate-800">{card.front}</p>
+                  <div className="mt-4 perspective-1000">
+                    <div
+                      className={`relative h-48 w-full cursor-pointer transition-transform duration-500 transform-style-preserve-3d ${showAnswer ? "rotate-y-180" : ""}`}
+                      onClick={() => setShowAnswer((s) => !s)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setShowAnswer((s) => !s);
+                        }
+                      }}
+                    >
+                      <div className="absolute inset-0 backface-hidden rounded-xl border border-slate-200 bg-slate-50 p-6">
+                        <p className="text-xs uppercase tracking-wide text-slate-400">Front</p>
+                        <p className="mt-2 text-lg font-medium text-slate-800">{card.front}</p>
+                        <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-slate-400">Click to flip</p>
+                      </div>
+                      <div className="absolute inset-0 rotate-y-180 backface-hidden rounded-xl border border-brand-200 bg-brand-50 p-6">
+                        <p className="text-xs uppercase tracking-wide text-brand-500">Back</p>
+                        <p className="mt-2 text-lg text-slate-800">{card.back}</p>
+                        <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-brand-400">Click to flip back</p>
+                      </div>
+                    </div>
                   </div>
 
-                  {showAnswer ? (
-                    <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50 p-6">
-                      <p className="text-xs uppercase tracking-wide text-brand-500">Back</p>
-                      <p className="mt-2 text-lg text-slate-800">{card.back}</p>
-                    </div>
-                  ) : (
+                  {!showAnswer && (
                     <button
                       onClick={() => setShowAnswer(true)}
                       className="btn-outline mt-4 w-full"
