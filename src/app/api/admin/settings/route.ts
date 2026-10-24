@@ -10,6 +10,16 @@ const schema = z.object({
   defaultPromptsPerDay: z.number().int().min(1).max(500).optional(),
   defaultPromptsPerWeek: z.number().int().min(1).max(5000).optional(),
   defaultModel: z.string().min(1).max(100).optional(),
+  fastModel: z.string().min(1).max(100).optional().nullable(),
+  visionModel: z.string().min(1).max(100).optional().nullable(),
+  provider: z.enum(["ollama", "openai", "anthropic", "openrouter", "google", "custom"]).optional(),
+  openaiApiKey: z.string().max(500).optional().nullable(),
+  anthropicApiKey: z.string().max(500).optional().nullable(),
+  openrouterApiKey: z.string().max(500).optional().nullable(),
+  googleApiKey: z.string().max(500).optional().nullable(),
+  customApiBase: z.string().max(500).optional().nullable(),
+  customApiKey: z.string().max(500).optional().nullable(),
+  customModel: z.string().max(200).optional().nullable(),
 });
 
 export async function GET() {

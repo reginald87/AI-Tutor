@@ -29,6 +29,10 @@ export async function getFastModel(): Promise<string> {
   return (s as any)?.fastModel || CONFIG.ollamaFastModel || s?.defaultModel || CONFIG.ollamaModel;
 }
 
+export async function getSettings() {
+  return prisma.setting.findUnique({ where: { id: "global" } });
+}
+
 export async function ollamaHealthy(): Promise<boolean> {
   try {
     const res = await fetch(`${CONFIG.ollamaHost}/api/tags`, { signal: AbortSignal.timeout(3000) });

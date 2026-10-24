@@ -714,7 +714,21 @@ function QuizzesTab() {
 
 function SettingsTab() {
   const [settings, setSettings] = useState<any>(null);
-  const [form, setForm] = useState({ defaultPromptsPerDay: 5, defaultPromptsPerWeek: 35, defaultModel: "" });
+  const [form, setForm] = useState<any>({
+    defaultPromptsPerDay: 5,
+    defaultPromptsPerWeek: 35,
+    defaultModel: "",
+    fastModel: "",
+    visionModel: "",
+    provider: "ollama",
+    openaiApiKey: "",
+    anthropicApiKey: "",
+    openrouterApiKey: "",
+    googleApiKey: "",
+    customApiBase: "",
+    customApiKey: "",
+    customModel: "",
+  });
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -724,7 +738,17 @@ function SettingsTab() {
         setForm({
           defaultPromptsPerDay: d.setting?.defaultPromptsPerDay ?? 5,
           defaultPromptsPerWeek: d.setting?.defaultPromptsPerWeek ?? 35,
-          defaultModel: d.model ?? "",
+          defaultModel: d.model ?? d.setting?.defaultModel ?? "",
+          fastModel: d.setting?.fastModel ?? "",
+          visionModel: d.setting?.visionModel ?? "",
+          provider: d.setting?.provider ?? "ollama",
+          openaiApiKey: d.setting?.openaiApiKey ?? "",
+          anthropicApiKey: d.setting?.anthropicApiKey ?? "",
+          openrouterApiKey: d.setting?.openrouterApiKey ?? "",
+          googleApiKey: d.setting?.googleApiKey ?? "",
+          customApiBase: d.setting?.customApiBase ?? "",
+          customApiKey: d.setting?.customApiKey ?? "",
+          customModel: d.setting?.customModel ?? "",
         });
       })
       .catch(() => {});
@@ -734,7 +758,7 @@ function SettingsTab() {
     setMsg("");
     try {
       await apiPut("/api/admin/settings", form);
-      setMsg("Settings saved. New defaults apply to newly registered students.");
+      setMsg("Settings saved.");
     } catch (e: any) {
       setMsg(e.message || "Save failed.");
     }
@@ -743,49 +767,167 @@ function SettingsTab() {
   if (!settings) return <p className="text-sm text-slate-400">Loading…</p>;
 
   return (
-    <div className="max-w-lg card p-5">
-      <h2 className="font-semibold text-slate-800">Global settings</h2>
-      <p className="mt-1 text-xs text-slate-400">
-        These defaults apply to students when they register. You can also override per student.
-      </p>
-      <div className="mt-4 space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Prompts per day</label>
-          <input
-            type="number"
-            min={1}
-            value={form.defaultPromptsPerDay}
-            onChange={(e) => setForm({ ...form, defaultPromptsPerDay: Number(e.target.value) })}
-            className="input"
-          />
+    <div className="max-w-2xl space-y-5">
+      <div className="card p-5">
+        <h2 className="font-semibold text-slate-800">Prompts & Model</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Defaults for new students. Ollama used by default.
+        </p>
+        <div className="mt-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Prompts per day</label>
+              <input
+                type="number"
+                min={1}
+                value={form.defaultPromptsPerDay}
+                onChange={(e) => setForm({ ...form, defaultPromptsPerDay: Number(e.target.value) })}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Prompts per week</label>
+              <input
+                type="number"
+                min={1}
+                value={form.defaultPromptsPerWeek}
+                onChange={(e) => setForm({ ...form, defaultPromptsPerWeek: Number(e.target.value) })}
+                className="input"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Provider</label>
+            <select
+              value={form.provider}
+              onChange={(e) => setForm({ ...form, provider: e.target.value })}
+              className="input"
+            >
+              <option value="ollama">Ollama (local)</option>
+              <option value="openai">OpenAI (ChatGPT)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="google">Google Gemini</option>
+              <option value="custom">Custom API (OpenAI compatible)</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Default model</label>
+            <input
+              value={form.defaultModel}
+              onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
+              className="input"
+              placeholder={form.provider === "ollama" ? "llama3.2:latest" : "gpt-4o-mini"}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Fast model (optional)</label>
+              <input
+                value={form.fastModel || ""}
+                onChange={(e) => setForm({ ...form, fastModel: e.target.value })}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Vision model (optional)</label>
+              <input
+                value={form.visionModel || ""}
+                onChange={(e) => setForm({ ...form, visionModel: e.target.value })}
+                className="input"
+              />
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Prompts per week</label>
-          <input
-            type="number"
-            min={1}
-            value={form.defaultPromptsPerWeek}
-            onChange={(e) => setForm({ ...form, defaultPromptsPerWeek: Number(e.target.value) })}
-            className="input"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Ollama model</label>
-          <input
-            value={form.defaultModel}
-            onChange={(e) => setForm({ ...form, defaultModel: e.target.value })}
-            className="input"
-            placeholder="llama3.2:latest"
-          />
-          <p className="mt-1 text-xs text-slate-400">
-            Must be pulled on the VPS (e.g. <code>ollama pull llama3.2</code>).
-          </p>
-        </div>
-        {msg && <p className="text-sm text-brand-600">{msg}</p>}
-        <button onClick={save} className="btn-primary">
-          Save settings
-        </button>
       </div>
+
+      <div className="card p-5">
+        <h2 className="font-semibold text-slate-800">API Keys (cloud models)</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          Keys are stored in DB; use with appropriate provider above. Leave empty if unused.
+        </p>
+        <div className="mt-4 space-y-3">
+          {(form.provider === "openai" || form.provider !== "ollama") && (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">OpenAI API Key</label>
+                <input
+                  type="password"
+                  value={form.openaiApiKey || ""}
+                  onChange={(e) => setForm({ ...form, openaiApiKey: e.target.value })}
+                  className="input"
+                  placeholder="sk-..."
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Anthropic API Key</label>
+                <input
+                  type="password"
+                  value={form.anthropicApiKey || ""}
+                  onChange={(e) => setForm({ ...form, anthropicApiKey: e.target.value })}
+                  className="input"
+                  placeholder="sk-ant-..."
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">OpenRouter API Key</label>
+                <input
+                  type="password"
+                  value={form.openrouterApiKey || ""}
+                  onChange={(e) => setForm({ ...form, openrouterApiKey: e.target.value })}
+                  className="input"
+                  placeholder="sk-or-..."
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Google Gemini API Key</label>
+                <input
+                  type="password"
+                  value={form.googleApiKey || ""}
+                  onChange={(e) => setForm({ ...form, googleApiKey: e.target.value })}
+                  className="input"
+                  placeholder="AIza..."
+                />
+              </div>
+            </>
+          )}
+          {form.provider === "custom" && (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Custom API Base URL</label>
+                <input
+                  value={form.customApiBase || ""}
+                  onChange={(e) => setForm({ ...form, customApiBase: e.target.value })}
+                  className="input"
+                  placeholder="https://api.example.com/v1"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Custom API Key</label>
+                <input
+                  type="password"
+                  value={form.customApiKey || ""}
+                  onChange={(e) => setForm({ ...form, customApiKey: e.target.value })}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Custom Model</label>
+                <input
+                  value={form.customModel || ""}
+                  onChange={(e) => setForm({ ...form, customModel: e.target.value })}
+                  className="input"
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {msg && <p className="text-sm text-brand-600">{msg}</p>}
+      <button onClick={save} className="btn-primary">
+        Save all settings
+      </button>
     </div>
   );
 }

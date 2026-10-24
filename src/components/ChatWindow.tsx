@@ -375,7 +375,7 @@ export default function ChatWindow() {
               autoSendTimeoutRef.current = null;
             }
           }
-        }, 2000);
+        }, 2500);
       };
       rec.onend = () => {
         setListening(false);

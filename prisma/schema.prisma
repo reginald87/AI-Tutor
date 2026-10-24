@@ -146,6 +146,14 @@ model Setting {
   fastModel             String?
   updatedAt             DateTime @updatedAt
   visionModel           String?
+  provider              String   @default("ollama")
+  openaiApiKey          String?
+  anthropicApiKey       String?
+  openrouterApiKey      String?
+  googleApiKey          String?
+  customApiBase         String?
+  customApiKey          String?
+  customModel           String?
 }
 
 model Announcement {
