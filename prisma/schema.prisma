@@ -8,122 +8,102 @@ datasource db {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  name          String
-  passwordHash  String
-  role          String   @default("STUDENT") // STUDENT | ADMIN
-  matricNumber  String?  @unique
-  department    String?
-  faculty       String?
-  program       String?
-  level         String?
-
-  verified      Boolean  @default(false)
-  verifyToken   String?  @unique
-  verifyTokenExpires DateTime?
-
-  // When true the user must change their password on next login (seed/admin reset).
-  mustChangePassword Boolean @default(false)
-
-  // Password reset (forgot-password flow + admin reset).
-  resetToken String? @unique
-  resetTokenExpires DateTime?
-
-  // Reward points earned by passing quizzes (encouragement system)
-  rewardPoints  Int      @default(0)
-
-  // Prompt accounting (consumed per AI generation request)
-  promptsPerDay   Int      @default(5)
-  promptsPerWeek  Int      @default(35)
-  dailyUsed       Int      @default(0)
-  weeklyUsed      Int      @default(0)
-  dailyResetAt    DateTime @default(now())
-  weeklyResetAt   DateTime @default(now())
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  documents   Document[]
-  chats       Chat[]
-  quizzes     Quiz[]
-  attempts    Attempt[]
-
-  announcements Announcement[]
-  escalations  Escalation[] @relation("EscalationAuthor")
-  answeredEscalations Escalation[] @relation("EscalationAnswerer")
-  flashcardDecks FlashcardDeck[]
-  reviewItems  ReviewItem[]
-  assignments  Assignment[]
+  id                  String          @id @default(cuid())
+  email               String          @unique
+  name                String
+  passwordHash        String
+  role                String          @default("STUDENT")
+  matricNumber        String?         @unique
+  department          String?
+  faculty             String?
+  program             String?
+  level               String?
+  verified            Boolean         @default(false)
+  verifyToken         String?         @unique
+  verifyTokenExpires  DateTime?
+  mustChangePassword  Boolean         @default(false)
+  rewardPoints        Int             @default(0)
+  promptsPerDay       Int             @default(5)
+  promptsPerWeek      Int             @default(35)
+  dailyUsed           Int             @default(0)
+  weeklyUsed          Int             @default(0)
+  dailyResetAt        DateTime        @default(now())
+  weeklyResetAt       DateTime        @default(now())
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  resetToken          String?         @unique
+  resetTokenExpires   DateTime?
+  announcements       Announcement[]
+  assignments         Assignment[]
+  attempts            Attempt[]
+  chats               Chat[]
+  documents           Document[]
+  answeredEscalations Escalation[]    @relation("EscalationAnswerer")
+  escalations         Escalation[]    @relation("EscalationAuthor")
+  flashcardDecks      FlashcardDeck[]
+  quizzes             Quiz[]
+  reviewItems         ReviewItem[]
 }
 
 model Document {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   filename  String
   mimeType  String
   size      Int
-  text      String // extracted plain text used for RAG context
+  text      String
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Chat {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String   @default("New chat")
-  docId     String? // active document context for this chat
+  title     String    @default("New chat")
+  docId     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  chatId    String
-  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  role      String // user | assistant | system
-  content   String
-  // JSON array of { docId, filename, snippet } retrieved to ground this reply.
-  sources   String?
-  // Model's self-reported confidence: "high" | "medium" | "low"
+  id         String   @id @default(cuid())
+  chatId     String
+  role       String
+  content    String
+  createdAt  DateTime @default(now())
   confidence String?
-  createdAt DateTime @default(now())
+  sources    String?
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
 }
 
 model Quiz {
-  id            String   @id @default(cuid())
+  id            String       @id @default(cuid())
   title         String
   description   String?
   creatorId     String
-  creator       User     @relation(fields: [creatorId], references: [id])
-  isAdminQuiz   Boolean  @default(false)
-
-  // Targeting (admin quizzes shown to matching students)
+  isAdminQuiz   Boolean      @default(false)
   faculty       String?
   department    String?
   program       String?
   level         String?
-
-  // Provenance
   sourceDocId   String?
-  generatedFrom String? // 'document' | 'topic' | 'manual'
-  status        String   @default("DRAFT") // DRAFT | PUBLISHED | GENERATING | FAILED
-  // Set when async background generation fails (status = FAILED).
-  error    String?
-
-  questions     Question[]
-  attempts      Attempt[]
+  generatedFrom String?
+  status        String       @default("DRAFT")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  error         String?
   assignments   Assignment[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  attempts      Attempt[]
+  questions     Question[]
+  creator       User         @relation(fields: [creatorId], references: [id])
 
   @@index([isAdminQuiz, status])
 }
@@ -131,13 +111,13 @@ model Quiz {
 model Question {
   id           String   @id @default(cuid())
   quizId       String
-  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   prompt       String
-  options      String // JSON-encoded string[]
+  options      String
   correctIndex Int
   explanation  String?
   order        Int      @default(0)
   createdAt    DateTime @default(now())
+  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([quizId])
 }
@@ -145,140 +125,129 @@ model Question {
 model Attempt {
   id          String   @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
   quizId      String
-  quiz        Quiz     @relation(fields: [quizId], references: [id])
   score       Int
   total       Int
   percentage  Float
-  answers     String // JSON-encoded array of { questionId, selectedIndex, correct }
+  answers     String
   completedAt DateTime @default(now())
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([quizId])
 }
 
 model Setting {
-  id                    String @id @default("global")
-  defaultPromptsPerDay  Int    @default(5)
-  defaultPromptsPerWeek Int    @default(35)
-  defaultModel          String @default("llama3.2:latest")
-  // Optional vision model used for image input (e.g. llava).
-  visionModel           String?
+  id                    String   @id @default("global")
+  defaultPromptsPerDay  Int      @default(5)
+  defaultPromptsPerWeek Int      @default(35)
+  defaultModel          String   @default("llama3.2:latest")
+  fastModel             String?
   updatedAt             DateTime @updatedAt
+  visionModel           String?
 }
 
-// ---- Announcements (admin notice board) ----
 model Announcement {
-  id        String   @id @default(cuid())
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  title     String
-  body      String
-  // Targeting (null/empty = everyone). Matches student profile fields.
+  id         String   @id @default(cuid())
+  authorId   String
+  title      String
+  body       String
   faculty    String?
   department String?
   program    String?
   level      String?
-  pinned    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
 }
 
-// ---- Ask-a-human escalation ----
 model Escalation {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation("EscalationAuthor", fields: [userId], references: [id], onDelete: Cascade)
-  chatId        String?
-  subject       String
-  message       String
-  status        String   @default("OPEN") // OPEN | ANSWERED | CLOSED
-  answer        String?
-  answeredById  String?
-  answeredBy    User?    @relation("EscalationAnswerer", fields: [answeredById], references: [id], onDelete: SetNull)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  userId       String
+  chatId       String?
+  subject      String
+  message      String
+  status       String   @default("OPEN")
+  answer       String?
+  answeredById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  answeredBy   User?    @relation("EscalationAnswerer", fields: [answeredById], references: [id])
+  user         User     @relation("EscalationAuthor", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([userId])
 }
 
-// ---- Flashcards (with built-in spaced repetition) ----
 model FlashcardDeck {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title       String
-  sourceDocId String?
+  id           String      @id @default(cuid())
+  userId       String
+  title        String
+  sourceDocId  String?
   sourceQuizId String?
-  // GENERATING (async job in progress) | PUBLISHED (ready) | FAILED (generation error)
-  status      String   @default("PUBLISHED")
-  // Error detail when status = FAILED.
-  error       String?
-  createdAt   DateTime @default(now())
-
-  cards Flashcard[]
+  status       String      @default("PUBLISHED")
+  error        String?
+  createdAt    DateTime    @default(now())
+  cards        Flashcard[]
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Flashcard {
-  id           String   @id @default(cuid())
-  deckId       String
-  deck         FlashcardDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  front        String
-  back         String
-  // Spaced-repetition state (SM-2 style)
-  dueAt        DateTime @default(now())
-  interval     Int      @default(0)
-  ease         Float    @default(2.5)
-  repetitions  Int      @default(0)
-  lastRating   Int?
-  createdAt    DateTime @default(now())
+  id          String        @id @default(cuid())
+  deckId      String
+  front       String
+  back        String
+  dueAt       DateTime      @default(now())
+  interval    Int           @default(0)
+  ease        Float         @default(2.5)
+  repetitions Int           @default(0)
+  lastRating  Int?
+  createdAt   DateTime      @default(now())
+  deck        FlashcardDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
 
   @@index([deckId])
   @@index([dueAt])
 }
 
-// ---- Spaced repetition for quiz mistakes ----
 model ReviewItem {
   id           String   @id @default(cuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   quizId       String
   questionId   String
   prompt       String
-  options      String // JSON-encoded string[]
+  options      String
   correctIndex Int
   explanation  String?
-  // Spaced-repetition state
   dueAt        DateTime @default(now())
   interval     Int      @default(0)
   ease         Float    @default(2.5)
   repetitions  Int      @default(0)
   lastRating   Int?
   createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([dueAt])
 }
 
-// ---- Bulk quiz assignment (admin -> cohorts) ----
 model Assignment {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   quizId       String
-  quiz         Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   assignedById String
-  assignedBy   User     @relation(fields: [assignedById], references: [id], onDelete: Cascade)
   title        String
   faculty      String?
   department   String?
   program      String?
   level        String?
   dueAt        DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  assignedBy   User      @relation(fields: [assignedById], references: [id], onDelete: Cascade)
+  quiz         Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
 }
