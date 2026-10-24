@@ -280,6 +280,10 @@ export default function ChatWindow() {
       setError("Speech input is not supported in this browser. Try Microsoft Edge (Chromium), Chrome, or ensure you're on HTTPS/localhost.");
       return;
     }
+    if (typeof window !== "undefined" && !window.isSecureContext && location.hostname !== "localhost") {
+      setError("Speech recognition requires a secure context (HTTPS). Open this site over HTTPS.");
+      return;
+    }
     if (listening) {
       if (autoSendTimeoutRef.current) {
         clearTimeout(autoSendTimeoutRef.current);
@@ -291,24 +295,10 @@ export default function ChatWindow() {
       setListening(false);
       return;
     }
-    // Request mic permission first for better compatibility on some devices
-    if (navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function") {
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          // Stop the tracks immediately; we just needed permission
-          stream.getTracks().forEach((t) => t.stop());
-          startRecognition();
-        })
-        .catch(() => {
-          setError("Microphone permission denied or unavailable. Check browser permissions and Bluetooth mic (set it as default input).");
-        });
-    } else {
-      startRecognition();
-    }
+    startRecognition(false);
   }
 
-  function startRecognition() {
+  function startRecognition(useContinuous = true, triedFallback = false) {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || (window as any).msSpeechRecognition;
     if (!SR) {
       setError("Speech input is not supported in this browser. Try Microsoft Edge, Chrome, or Chromium-based browsers.");
@@ -318,12 +308,20 @@ export default function ChatWindow() {
       const rec = new SR();
       rec.lang = "en-US";
       rec.interimResults = true;
-      rec.continuous = true;
+      rec.continuous = useContinuous;
       if (typeof rec.maxAlternatives !== "undefined") {
         rec.maxAlternatives = 1;
       }
 
+      let gotResult = false;
+
+      rec.onstart = () => {
+        setListening(true);
+        setError("");
+      };
+
       rec.onresult = (e: any) => {
+        gotResult = true;
         let transcript = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
           transcript += e.results[i][0].transcript;
@@ -355,6 +353,13 @@ export default function ChatWindow() {
           clearTimeout(autoSendTimeoutRef.current);
           autoSendTimeoutRef.current = null;
         }
+        // If we started in continuous mode but got no results and it ended immediately, try non-continuous fallback
+        if (useContinuous && !triedFallback && !gotResult) {
+          try {
+            startRecognition(false, true);
+            return;
+          } catch {}
+        }
       };
       rec.onerror = (e: any) => {
         setListening(false);
@@ -362,20 +367,47 @@ export default function ChatWindow() {
           clearTimeout(autoSendTimeoutRef.current);
           autoSendTimeoutRef.current = null;
         }
-        if (e?.error === "not-allowed") {
-          setError("Microphone permission denied. Allow mic access in browser settings.");
-        } else if (e?.error === "no-speech") {
-          // ignore common no-speech errors
-        } else if (e?.error === "audio-capture") {
-          setError("No microphone found. If using Bluetooth, ensure it's connected and set as default mic.");
-        } else {
-          setError("Speech recognition error. Try again or use a different browser.");
+        const err = e?.error || "";
+        if (err === "not-allowed" || err === "service-not-allowed") {
+          setError("Microphone permission denied. Allow mic access in browser/site settings.");
+          return;
         }
+        if (err === "audio-capture") {
+          setError("No microphone found. If using a Bluetooth mic, connect it and set it as the default input device.");
+          return;
+        }
+        if (err === "no-speech") {
+          // Common on some devices - don't spam error
+          return;
+        }
+        if (err === "network") {
+          setError("Speech recognition network error. Some browsers/tablets need a stable network or different browser (try Microsoft Edge/Chrome).");
+          return;
+        }
+        if (err === "aborted") {
+          return;
+        }
+        if (useContinuous && !triedFallback) {
+          try {
+            startRecognition(false, true);
+            return;
+          } catch {}
+        }
+        setError(`Speech recognition error (${err || "unknown"}). Try again or use Microsoft Edge/Chrome over HTTPS.`);
       };
       recognitionRef.current = rec;
-      rec.start();
-      setListening(true);
-      setError("");
+      try {
+        rec.start();
+      } catch (err) {
+        if (useContinuous && !triedFallback) {
+          try {
+            startRecognition(false, true);
+            return;
+          } catch {}
+        }
+        setError("Could not start speech input. Try again or use a different browser.");
+        setListening(false);
+      }
     } catch (err) {
       setError("Could not start speech input.");
       setListening(false);
