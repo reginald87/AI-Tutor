@@ -363,7 +363,6 @@ export default function ChatWindow() {
         }
         autoSendTimeoutRef.current = setTimeout(() => {
           const finalText = transcript.trim();
-          console.log("Auto-send checking:", { finalText, exhausted: prompts?.exhausted });
           if (finalText && !prompts?.exhausted) {
             if (autoSendTimeoutRef.current) {
               clearTimeout(autoSendTimeoutRef.current);
@@ -396,9 +395,13 @@ export default function ChatWindow() {
             return;
           } catch {}
         }
-        if (autoSendTimeoutRef.current) {
-          clearTimeout(autoSendTimeoutRef.current);
-          autoSendTimeoutRef.current = null;
+        // Only clear auto-send timeout if we're restarting or in voice mode
+        // In non-continuous mode (regular mic), let the timeout fire
+        if (useContinuous || voiceModeRef.current) {
+          if (autoSendTimeoutRef.current) {
+            clearTimeout(autoSendTimeoutRef.current);
+            autoSendTimeoutRef.current = null;
+          }
         }
         if (voiceModeRef.current && !wakeListeningRef.current) {
           setTimeout(() => {
@@ -410,11 +413,14 @@ export default function ChatWindow() {
       };
       rec.onerror = (e: any) => {
         setListening(false);
-        if (autoSendTimeoutRef.current) {
-          clearTimeout(autoSendTimeoutRef.current);
-          autoSendTimeoutRef.current = null;
-        }
         const err = e?.error || "";
+        // Only clear timeout on actual errors, not on no-speech or aborted
+        if (err !== "no-speech" && err !== "aborted") {
+          if (autoSendTimeoutRef.current) {
+            clearTimeout(autoSendTimeoutRef.current);
+            autoSendTimeoutRef.current = null;
+          }
+        }
         if (err === "not-allowed" || err === "service-not-allowed") {
           setError("Microphone permission denied. Allow mic access in browser/site settings.");
           return;
@@ -442,7 +448,7 @@ export default function ChatWindow() {
         }
         if (voiceModeRef.current) {
           setTimeout(() => {
-            if (voiceModeRef.current && !listening) {
+            if (voiceModeRef.current && !listeningRef.current) {
               startWakeWordListener();
             }
           }, 800);
@@ -497,9 +503,7 @@ export default function ChatWindow() {
           transcript += e.results[i][0].transcript;
         }
         const lower = transcript.toLowerCase();
-        console.log("Wake word detected:", transcript, lower);
         if (WAKE_WORDS.some((w) => lower.includes(w))) {
-          console.log("Wake word matched, starting recognition");
           try {
             wakeRecognitionRef.current?.abort?.();
           } catch {}
