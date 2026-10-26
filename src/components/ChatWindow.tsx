@@ -52,6 +52,7 @@ export default function ChatWindow() {
   const inputRef = useRef<string>("");
   const voiceModeRef = useRef(false);
   const wakeListeningRef = useRef(false);
+  const listeningRef = useRef(false);
 
   // Load initial data + optional ?chat= query.
   // Reset everything when the signed-in user changes so one account never
@@ -98,6 +99,10 @@ export default function ChatWindow() {
   useEffect(() => {
     voiceModeRef.current = voiceMode;
   }, [voiceMode]);
+
+  useEffect(() => {
+    listeningRef.current = listening;
+  }, [listening]);
 
   useEffect(() => {
     wakeListeningRef.current = wakeListening;
@@ -358,6 +363,7 @@ export default function ChatWindow() {
         }
         autoSendTimeoutRef.current = setTimeout(() => {
           const finalText = transcript.trim();
+          console.log("Auto-send checking:", { finalText, exhausted: prompts?.exhausted });
           if (finalText && !prompts?.exhausted) {
             if (autoSendTimeoutRef.current) {
               clearTimeout(autoSendTimeoutRef.current);
@@ -396,7 +402,7 @@ export default function ChatWindow() {
         }
         if (voiceModeRef.current && !wakeListeningRef.current) {
           setTimeout(() => {
-            if (voiceModeRef.current && !listening) {
+            if (voiceModeRef.current && !listeningRef.current) {
               startWakeWordListener();
             }
           }, 400);
@@ -491,7 +497,9 @@ export default function ChatWindow() {
           transcript += e.results[i][0].transcript;
         }
         const lower = transcript.toLowerCase();
+        console.log("Wake word detected:", transcript, lower);
         if (WAKE_WORDS.some((w) => lower.includes(w))) {
+          console.log("Wake word matched, starting recognition");
           try {
             wakeRecognitionRef.current?.abort?.();
           } catch {}
@@ -507,9 +515,9 @@ export default function ChatWindow() {
 
       rec.onend = () => {
         setWakeListening(false);
-        if (voiceModeRef.current && !listening) {
+        if (voiceModeRef.current && !listeningRef.current) {
           setTimeout(() => {
-            if (voiceModeRef.current && !listening) {
+            if (voiceModeRef.current && !listeningRef.current) {
               startWakeWordListener(triedFallback);
             }
           }, 500);
@@ -530,9 +538,9 @@ export default function ChatWindow() {
         if (err === "no-speech" || err === "aborted") {
           // Don't show error, just restart
         }
-        if (voiceModeRef.current && !listening) {
+        if (voiceModeRef.current && !listeningRef.current) {
           setTimeout(() => {
-            if (voiceModeRef.current && !listening) {
+            if (voiceModeRef.current && !listeningRef.current) {
               if (!triedFallback && err !== "not-allowed" && err !== "audio-capture") {
                 startWakeWordListener(true);
               } else {
@@ -547,7 +555,7 @@ export default function ChatWindow() {
       rec.start();
     } catch {
       setWakeListening(false);
-      if (voiceModeRef.current && !listening && !triedFallback) {
+      if (voiceModeRef.current && !listeningRef.current && !triedFallback) {
         setTimeout(() => {
           startWakeWordListener(true);
         }, 1000);
