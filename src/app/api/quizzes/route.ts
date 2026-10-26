@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireVerifiedUser } from "@/lib/auth";
 import { consumePrompt, getPromptState } from "@/lib/prompts";
-import { generate, ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
+import { ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
+import { generateUnified } from "@/lib/llmProviders";
 import { buildQuizPrompt } from "@/lib/llm";
 import { sanitizeQuiz } from "@/lib/quiz";
 import { runInBackground } from "@/lib/background";
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
       };
       const { system, user: userPrompt } = buildQuizPrompt(spec);
 
-      const raw = await generate(userPrompt, { system, temperature: 0.2, numPredict: 1024, numCtx: 4096, useFastModel: true });
+      const raw = await generateUnified(userPrompt, { system, temperature: 0.2, numPredict: 1024, numCtx: 4096, useFastModel: true });
       const cleaned = parseJsonBlock(raw);
 
       const quiz = sanitizeQuiz(cleaned);

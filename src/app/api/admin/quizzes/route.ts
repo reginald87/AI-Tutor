@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { generate, ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
+import { ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
+import { generateUnified } from "@/lib/llmProviders";
 import { buildQuizPrompt } from "@/lib/llm";
 import { sanitizeQuiz } from "@/lib/quiz";
 import { runInBackground } from "@/lib/background";
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
       };
       const { system, user: userPrompt } = buildQuizPrompt(spec);
 
-      const raw = await generate(userPrompt, { system });
+      const raw = await generateUnified(userPrompt, { system });
       const cleaned = parseJsonBlock(raw);
 
       const quiz = sanitizeQuiz(cleaned);

@@ -217,3 +217,140 @@ export async function* chatStream(...args: any[]): AsyncGenerator<string> {
   // @ts-ignore
   return chatStreamUnified(args[0], args[1]);
 }
+
+export async function generateUnified(
+  prompt: string,
+  opts: { system?: string; temperature?: number; numPredict?: number; numCtx?: number; useFastModel?: boolean; model?: string } = {}
+): Promise<string> {
+  const settings = await getSettings();
+  const provider = (settings as any)?.provider || "ollama";
+
+  if (provider === "ollama") {
+    const { generate } = await import("./ollama");
+    return await generate(prompt, opts);
+  }
+
+  // OpenAI-compatible style for cloud providers if keys present
+  if (provider === "openai" && (settings as any)?.openaiApiKey) {
+    const apiKey = (settings as any).openaiApiKey;
+    const model = opts.model || (settings as any)?.defaultModel || "gpt-4o-mini";
+    const messages: any[] = [];
+    if (opts.system) messages.push({ role: "system", content: opts.system });
+    messages.push({ role: "user", content: prompt });
+    
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        temperature: opts.temperature ?? 0.7,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`OpenAI request failed (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "";
+  }
+
+  if (provider === "deepseek" && (settings as any)?.deepseekApiKey) {
+    const apiKey = (settings as any).deepseekApiKey;
+    const model = opts.model || (settings as any)?.defaultModel || "deepseek-chat";
+    const messages: any[] = [];
+    if (opts.system) messages.push({ role: "system", content: opts.system });
+    messages.push({ role: "user", content: prompt });
+    
+    const res = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        temperature: opts.temperature ?? 0.7,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`DeepSeek request failed (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "";
+  }
+
+  if (provider === "openrouter" && (settings as any)?.openrouterApiKey) {
+    const apiKey = (settings as any).openrouterApiKey;
+    const model = opts.model || (settings as any)?.defaultModel || "openrouter/auto";
+    const messages: any[] = [];
+    if (opts.system) messages.push({ role: "system", content: opts.system });
+    messages.push({ role: "user", content: prompt });
+    
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+        "X-Title": "BMU AI Tutor",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        temperature: opts.temperature ?? 0.7,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`OpenRouter request failed (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "";
+  }
+
+  if (provider === "custom" && (settings as any)?.customApiBase && (settings as any)?.customApiKey) {
+    const apiKey = (settings as any).customApiKey;
+    const base = (settings as any).customApiBase.replace(/\/$/, "");
+    const model = opts.model || (settings as any)?.customModel || (settings as any)?.defaultModel || "gpt-4o-mini";
+    const messages: any[] = [];
+    if (opts.system) messages.push({ role: "system", content: opts.system });
+    messages.push({ role: "user", content: prompt });
+    
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: false,
+        temperature: opts.temperature ?? 0.7,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Custom API request failed (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || "";
+  }
+
+  // Fallback to ollama
+  const { generate } = await import("./ollama");
+  return await generate(prompt, opts);
+}

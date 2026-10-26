@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireVerifiedUser } from "@/lib/auth";
 import { consumePrompt, getPromptState } from "@/lib/prompts";
-import { generate, ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
+import { ollamaHealthy, parseJsonBlock } from "@/lib/ollama";
+import { generateUnified } from "@/lib/llmProviders";
 import { buildFlashcardPrompt } from "@/lib/llm";
 import { runInBackground } from "@/lib/background";
 
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
         count: count ?? 8,
       });
 
-      const raw = await generate(userPrompt, { system, temperature: 0.2, numPredict: 768, numCtx: 4096, useFastModel: true });
+      const raw = await generateUnified(userPrompt, { system, temperature: 0.2, numPredict: 768, numCtx: 4096, useFastModel: true });
       const cleaned: any = parseJsonBlock(raw);
 
       const cards = Array.isArray(cleaned?.cards)
