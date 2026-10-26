@@ -53,6 +53,7 @@ export default function ChatWindow() {
   const voiceModeRef = useRef(false);
   const wakeListeningRef = useRef(false);
   const listeningRef = useRef(false);
+  const wakeRestartingRef = useRef(false);
 
   // Load initial data + optional ?chat= query.
   // Reset everything when the signed-in user changes so one account never
@@ -483,7 +484,7 @@ export default function ChatWindow() {
     if (typeof window !== "undefined" && !window.isSecureContext && location.hostname !== "localhost") return;
     if (wakeRecognitionRef.current) {
       try {
-        wakeRecognitionRef.current.abort?.();
+        wakeRecognitionRef.current?.abort?.();
       } catch {}
     }
     try {
@@ -494,6 +495,7 @@ export default function ChatWindow() {
       if (typeof rec.maxAlternatives !== "undefined") rec.maxAlternatives = 1;
 
       rec.onstart = () => {
+        wakeRestartingRef.current = false;
         setWakeListening(true);
       };
 
@@ -518,24 +520,27 @@ export default function ChatWindow() {
       };
 
       rec.onend = () => {
-        setWakeListening(false);
         if (voiceModeRef.current && !listeningRef.current) {
+          wakeRestartingRef.current = true;
           setTimeout(() => {
             if (voiceModeRef.current && !listeningRef.current) {
               startWakeWordListener(triedFallback);
             }
           }, 500);
+        } else {
+          setWakeListening(false);
         }
       };
 
       rec.onerror = (e: any) => {
-        setWakeListening(false);
         const err = e?.error || "";
         if (err === "not-allowed" || err === "service-not-allowed") {
+          setWakeListening(false);
           setError("Microphone permission denied. Allow mic access in browser/site settings.");
           return;
         }
         if (err === "audio-capture") {
+          setWakeListening(false);
           setError("No microphone found. If using a Bluetooth mic, connect it and set it as the default input device.");
           return;
         }
@@ -543,6 +548,7 @@ export default function ChatWindow() {
           // Don't show error, just restart
         }
         if (voiceModeRef.current && !listeningRef.current) {
+          wakeRestartingRef.current = true;
           setTimeout(() => {
             if (voiceModeRef.current && !listeningRef.current) {
               if (!triedFallback && err !== "not-allowed" && err !== "audio-capture") {
@@ -552,6 +558,8 @@ export default function ChatWindow() {
               }
             }
           }, 1000);
+        } else {
+          setWakeListening(false);
         }
       };
 
@@ -560,6 +568,7 @@ export default function ChatWindow() {
     } catch {
       setWakeListening(false);
       if (voiceModeRef.current && !listeningRef.current && !triedFallback) {
+        wakeRestartingRef.current = true;
         setTimeout(() => {
           startWakeWordListener(true);
         }, 1000);
@@ -579,6 +588,7 @@ export default function ChatWindow() {
     }
     if (voiceMode) {
       setVoiceMode(false);
+      wakeRestartingRef.current = false;
       try {
         wakeRecognitionRef.current?.abort?.();
       } catch {}
